@@ -120,7 +120,6 @@
         .password-field input { margin-bottom: 0; padding-right: 78px; }
         .password-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: var(--bg-card); color: var(--gold); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
         .password-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-        .auth-message { color: var(--text-muted); margin: 16px auto; max-width: 640px; padding: 0 16px; }
 
         .wishlist-item { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
         .wishlist-item input { margin-bottom: 0; flex: 1; min-width: 0; }
@@ -148,7 +147,6 @@
         }
         .participant-name { font-weight: 600; word-break: break-word; }
         .participant-secret { font-size: 0.85rem; color: var(--text-muted); word-break: break-word; }
-        .participant-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
 
         .name-search { max-width: 400px; margin: 0 auto; text-align: left; }
         .name-suggestions { margin-top: 6px; max-height: 230px; overflow-y: auto; border: 1px solid var(--secondary); border-radius: 10px; background: var(--bg-card, #202c2a); }
@@ -244,15 +242,6 @@
         }
         .admin-btn-grid .btn { justify-content: center; width: 100%; text-align: center; }
 
-        /* File input styling */
-        .file-input-wrapper {
-            position: relative; display: inline-flex;
-        }
-        .file-input-wrapper input[type="file"] {
-            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
-            opacity: 0; cursor: pointer;
-        }
-
         /* Mobile-first responsive */
         @media (max-width: 600px) {
             .header h1 { font-size: 2.2rem; }
@@ -291,14 +280,6 @@
 <!-- Sync bar -->
 <div class="sync-bar" id="syncBar">🔄 Connecting to shared exchange...</div>
 
-<p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
-<div id="recoveryScreen" class="card setup-card" hidden>
-    <h2>Set a new organizer password</h2>
-    <label for="recoveryPassword">New password</label>
-    <div class="password-field"><input type="password" id="recoveryPassword" autocomplete="new-password" minlength="8" placeholder="At least 8 characters"><button type="button" class="password-toggle" aria-controls="recoveryPassword" aria-pressed="false" aria-label="Show password" onclick="togglePassword('recoveryPassword', this)">Show</button></div>
-    <button class="btn btn-primary" onclick="saveRecoveredPassword()">Save New Password</button>
-</div>
-
 <!-- Setup screen (first time) -->
 <div id="setupScreen" style="display:none;">
     <div class="header">
@@ -308,22 +289,16 @@
     <div class="card setup-card">
         <h2>🔧 First-Time Setup</h2>
         <p style="color: var(--text-muted); margin-bottom: 20px;">
-            Organizer: create an account, confirm your email, then sign in to start your class exchange.
-            Participants can join from this site once setup is complete.
+            Set an Organizer / Admin password to start your class exchange. You will use this password to access admin controls, shuffle pairs, and manage participants.
         </p>
-        <label for="setupEmail">Organizer email</label>
-        <input type="email" id="setupEmail" placeholder="Your email address" autocomplete="email">
-        <label for="setupAdminPass">Organizer password</label>
-        <div class="password-field"><input type="password" id="setupAdminPass" placeholder="At least 8 characters" autocomplete="new-password"><button type="button" class="password-toggle" aria-controls="setupAdminPass" aria-pressed="false" aria-label="Show password" onclick="togglePassword('setupAdminPass', this)">Show</button></div>
+        <label for="setupAdminPass">Choose Organizer Password</label>
+        <div class="password-field">
+            <input type="password" id="setupAdminPass" placeholder="At least 6 characters" autocomplete="new-password">
+            <button type="button" class="password-toggle" aria-controls="setupAdminPass" aria-pressed="false" aria-label="Show password" onclick="togglePassword('setupAdminPass', this)">Show</button>
+        </div>
         <div class="btn-row-center">
-            <button class="btn btn-outline" onclick="signupAdmin()">Create Organizer Account</button>
-            <button class="btn btn-primary" onclick="completeSetup()">Sign In & Start Exchange</button>
+            <button class="btn btn-primary" onclick="completeSetup()">🚀 Start Exchange</button>
         </div>
-        <div class="btn-row-center" style="margin-top: 12px;">
-            <button class="btn btn-outline btn-sm" onclick="resendConfirmation('setupEmail', 'setupAdminPass', this)">Resend Confirmation Email</button>
-            <button class="btn btn-outline btn-sm" onclick="sendRecovery('setupEmail', this)">Forgot Password</button>
-        </div>
-        <p style="color: var(--text-muted); margin-top: 16px;">Already confirmed your email? Sign in above to finish setup. Check spam if the confirmation email is missing.</p>
     </div>
 </div>
 
@@ -420,13 +395,13 @@
             <div class="card">
                 <h2>⚙️ Admin Panel <span class="admin-badge">🔒 Admin Only</span></h2>
                 <div id="adminLogin" style="text-align: center;">
-                    <p style="color: var(--text-muted); margin-bottom: 16px;">Sign in with the organizer account to access controls.</p>
-                    <input type="email" id="adminEmail" placeholder="Organizer email" autocomplete="email" style="max-width: 300px; text-align: center;">
-                    <div class="password-field" style="max-width: 300px; margin-left: auto; margin-right: auto;"><input type="password" id="adminPass" autocomplete="current-password" placeholder="Admin password" style="text-align: center;"><button type="button" class="password-toggle" aria-controls="adminPass" aria-pressed="false" aria-label="Show password" onclick="togglePassword('adminPass', this)">Show</button></div>
+                    <p style="color: var(--text-muted); margin-bottom: 16px;">Enter the organizer password to access admin controls.</p>
+                    <div class="password-field" style="max-width: 320px; margin-left: auto; margin-right: auto;">
+                        <input type="password" id="adminPass" autocomplete="current-password" placeholder="Admin password" style="text-align: center;">
+                        <button type="button" class="password-toggle" aria-controls="adminPass" aria-pressed="false" aria-label="Show password" onclick="togglePassword('adminPass', this)">Show</button>
+                    </div>
                     <div style="margin-top: 10px;">
-                        <button class="btn btn-primary" onclick="adminLogin()">🔓 Login</button>
-                        <button class="btn btn-outline btn-sm" onclick="resendConfirmation('adminEmail', 'adminPass', this)">Resend Confirmation</button>
-                        <button class="btn btn-outline btn-sm" onclick="sendRecovery('adminEmail', this)">Forgot Password</button>
+                        <button class="btn btn-primary" onclick="adminLogin()">🔓 Unlock Admin</button>
                     </div>
                 </div>
                 <div id="adminControls" style="display: none;">
@@ -453,7 +428,10 @@
 
                     <div style="margin-top: 30px;">
                         <h3 style="margin-bottom: 10px;">🔑 Change Admin Password</h3>
-                        <div class="password-field"><input type="password" id="newAdminPass" placeholder="New password"><button type="button" class="password-toggle" aria-controls="newAdminPass" aria-pressed="false" aria-label="Show password" onclick="togglePassword('newAdminPass', this)">Show</button></div>
+                        <div class="password-field">
+                            <input type="password" id="newAdminPass" placeholder="New password (min. 6 characters)">
+                            <button type="button" class="password-toggle" aria-controls="newAdminPass" aria-pressed="false" aria-label="Show password" onclick="togglePassword('newAdminPass', this)">Show</button>
+                        </div>
                         <button class="btn btn-outline btn-sm" onclick="changePassword()">Update Password</button>
                     </div>
                     <div style="margin-top: 30px;">
@@ -529,15 +507,18 @@
 </div>
 
 <script>
-// ==================== SHARED DATA ====================
+// ==================== SHARED DATA & API ====================
 let cachedData = null;
+let adminToken = localStorage.getItem('bunot_admin_token') || '';
 
 async function api(path, body) {
-    if (window.identity && ['admin', 'setup', 'shuffle', 'unshuffle', 'reset', 'edit', 'delete', 'import'].includes(path)) await identity.getUser();
+    const headers = {};
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    if (adminToken) headers['Authorization'] = 'Bearer ' + adminToken;
+
     const response = await fetch('/api/' + path, {
         method: body === undefined ? 'GET' : 'POST',
-        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
+        headers,
         body: body === undefined ? undefined : JSON.stringify(body)
     });
     const result = await response.json();
@@ -592,69 +573,18 @@ function togglePassword(id, button) {
     button.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
 }
 
-function authMessage(message) {
-    document.getElementById('authMessage').textContent = message;
-}
-
-async function resendConfirmation(emailId, passwordId, button) {
-    const emailInput = document.getElementById(emailId);
-    const password = document.getElementById(passwordId).value;
-    if (!emailInput.value.trim() || !emailInput.checkValidity() || password.length < 8) {
-        return authMessage('Enter your organizer email and original password (at least 8 characters) to resend confirmation.');
-    }
-    button.disabled = true;
-    try {
-        await identity.signup(emailInput.value.trim(), password);
-        authMessage('Confirmation requested. Check your inbox and spam folder, then open the newest confirmation link. If already confirmed, sign in.');
-    } catch (e) { authMessage(e.status === 429 ? 'Too many email requests. Wait a few minutes before trying again.' : e.message); }
-    finally { button.disabled = false; }
-}
-
-async function sendRecovery(emailId, button) {
-    const input = document.getElementById(emailId);
-    if (!input.value.trim() || !input.checkValidity()) return authMessage('Enter a valid organizer email address first.');
-    button.disabled = true;
-    try {
-        await identity.requestPasswordRecovery(input.value.trim());
-        authMessage('If an account exists for that email, a password reset link has been requested. Check your inbox and spam folder.');
-    } catch (e) { authMessage(e.status === 429 ? 'Too many email requests. Wait a few minutes before trying again.' : e.message); }
-    finally { button.disabled = false; }
-}
-
-async function saveRecoveredPassword() {
-    const input = document.getElementById('recoveryPassword');
-    if (input.value.length < 8) return authMessage('Use at least 8 characters for your new password.');
-    try {
-        await identity.updateUser({ password: input.value });
-        input.value = '';
-        document.getElementById('recoveryScreen').hidden = true;
-        authMessage('Password updated. You can now use your new password to sign in.');
-        await initApp();
-    } catch (e) { authMessage(e.message); }
-}
-
 // ==================== ORGANIZER SETUP ====================
-async function signupAdmin() {
-    const email = document.getElementById('setupEmail').value.trim();
-    const password = document.getElementById('setupAdminPass').value;
-    if (!email || password.length < 8) return showToast('Enter your email and a password of at least 8 characters.', 'error');
-    try {
-        const user = await identity.signup(email, password);
-        if (user.emailVerified) await finishSetup();
-        else authMessage('Account created. Check your inbox and spam folder for the confirmation email. Open the newest link to finish setup. Use Resend Confirmation Email if needed.');
-    } catch (e) { showToast(e.message, 'error'); }
-}
-
-async function finishSetup() {
-    await api('setup', {});
-    showToast('🎉 Exchange ready! Share the site link with your class.');
-    await initApp();
-}
-
 async function completeSetup() {
+    const pass = document.getElementById('setupAdminPass').value;
+    if (!pass || pass.length < 6) return showToast('Password must be at least 6 characters.', 'error');
     try {
-        await identity.login(document.getElementById('setupEmail').value.trim(), document.getElementById('setupAdminPass').value);
-        await finishSetup();
+        const res = await api('setup', { adminPass: pass });
+        if (res.token) {
+            adminToken = res.token;
+            localStorage.setItem('bunot_admin_token', adminToken);
+        }
+        showToast('🎉 Exchange ready! Share the site link with your class.');
+        await initApp();
     } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -862,7 +792,7 @@ async function revealMatch() {
     if (!receiver) return showToast('Something went wrong. Contact admin.', 'error');
 
     const wishHtml = receiver.wishlist.map(w => {
-        if (w.link) return `<li>${esc(w.name)} — <a href="${esc(w.link)}" target="_blank">🔗 Link</a></li>`;
+        if (w.link) return `<li>${esc(w.name)} — <a href="${esc(w.link)}" target="_blank" rel="noopener noreferrer">🔗 Link</a></li>`;
         return `<li>${esc(w.name)}</li>`;
     }).join('');
 
@@ -894,24 +824,30 @@ async function showAdminControls() {
 }
 
 async function adminLogin() {
+    const pass = document.getElementById('adminPass').value;
+    if (!pass) return showToast('Enter your admin password!', 'error');
     try {
-        await identity.login(document.getElementById('adminEmail').value.trim(), document.getElementById('adminPass').value);
+        const res = await api('login', { adminPass: pass });
+        if (res.token) {
+            adminToken = res.token;
+            localStorage.setItem('bunot_admin_token', adminToken);
+        }
         document.getElementById('adminPass').value = '';
         await showAdminControls();
         showToast('Welcome, Admin! 🔓');
     } catch (e) { showToast(e.message, 'error'); }
 }
 
-async function adminLogout() {
-    try {
-        await identity.logout();
-        isAdmin = false;
-        document.getElementById('adminLogin').style.display = 'block';
-        document.getElementById('adminControls').style.display = 'none';
-        document.getElementById('adminPairings').textContent = '';
-        document.getElementById('adminWishlists').textContent = '';
-        showToast('Signed out.');
-    } catch (e) { showToast(e.message, 'error'); }
+function adminLogout() {
+    adminToken = '';
+    localStorage.removeItem('bunot_admin_token');
+    isAdmin = false;
+    document.getElementById('adminLogin').style.display = 'block';
+    document.getElementById('adminControls').style.display = 'none';
+    document.getElementById('adminPairings').textContent = '';
+    document.getElementById('adminWishlists').textContent = '';
+    document.getElementById('adminPass').value = '';
+    showToast('Signed out.');
 }
 
 async function copyShareLink() {
@@ -923,9 +859,13 @@ async function copyShareLink() {
 
 async function changePassword() {
     const newPass = document.getElementById('newAdminPass').value;
-    if (newPass.length < 8) return showToast('Password must be at least 8 characters!', 'error');
+    if (newPass.length < 6) return showToast('Password must be at least 6 characters!', 'error');
     try {
-        await identity.updateUser({ password: newPass });
+        const res = await api('change-password', { newAdminPass: newPass });
+        if (res.token) {
+            adminToken = res.token;
+            localStorage.setItem('bunot_admin_token', adminToken);
+        }
         document.getElementById('newAdminPass').value = '';
         showToast('Password updated! 🔑');
     } catch (e) { showToast(e.message, 'error'); }
@@ -1106,7 +1046,7 @@ let pendingImport = null;
 function importFromExcel(event) {
     const file = event.target.files[0];
     if (!file) return;
-    event.target.value = ''; // reset so same file can be re-selected
+    event.target.value = '';
 
     const reader = new FileReader();
     reader.onload = function (e) {
@@ -1117,7 +1057,6 @@ function importFromExcel(event) {
 
             if (!rows.length) return showToast('The Excel file is empty.', 'error');
 
-            // Parse participants from the exported format
             const participants = [];
             const pairings = [];
 
@@ -1130,7 +1069,6 @@ function importFromExcel(event) {
 
                 if (!realName || !secretName) continue;
 
-                // Parse wishlist: items and links are comma-separated
                 const itemNames = wishlistItemsStr.split(',').map(s => s.trim()).filter(Boolean);
                 const itemLinks = wishlistLinksStr.split(',').map(s => s.trim());
                 const wishlist = itemNames.map((name, i) => ({
@@ -1139,7 +1077,7 @@ function importFromExcel(event) {
                 }));
 
                 if (wishlist.length === 0) {
-                    wishlist.push({ name: 'No wishlist specified', link: '' });
+                    wishlist.push({ name: 'Gift of choice', link: '' });
                 }
 
                 participants.push({ realName, secretName, wishlist });
@@ -1192,6 +1130,7 @@ function esc(str) { const d = document.createElement('div'); d.textContent = str
 
 function createSnowflakes() {
     const c = document.getElementById('snowflakes');
+    if (!c) return;
     const flakes = ['❄', '❅', '❆', '✦', '•'];
     for (let i = 0; i < 40; i++) {
         const f = document.createElement('div');
@@ -1215,14 +1154,16 @@ async function initApp() {
         document.getElementById('setupScreen').style.display = initialized ? 'none' : 'block';
         document.getElementById('mainApp').style.display = initialized ? 'block' : 'none';
         if (!initialized) {
-            setSyncStatus('ok', '🎄 Waiting for the organizer to finish setup');
+            setSyncStatus('ok', '🎄 Waiting for organizer to set password');
             return;
         }
         await refreshData();
-        try { await showAdminControls(); } catch (_) {
-            isAdmin = false;
-            document.getElementById('adminLogin').style.display = 'block';
-            document.getElementById('adminControls').style.display = 'none';
+        if (adminToken) {
+            try {
+                await showAdminControls();
+            } catch (_) {
+                adminLogout();
+            }
         }
         refreshTimer = setInterval(() => { if (!document.hidden) refreshData(); }, 15000);
     } catch (e) {
@@ -1232,28 +1173,11 @@ async function initApp() {
 }
 
 createSnowflakes();
-window.addEventListener('identity-ready', async () => {
-    // Remove the obsolete browser configuration without reading or reusing it.
-    try { localStorage.removeItem('bunotBunotConfig'); } catch (_) {}
-    try {
-        const callback = await identity.handleAuthCallback();
-        if (callback?.type === 'recovery') {
-            document.getElementById('recoveryScreen').hidden = false;
-            document.getElementById('setupScreen').style.display = 'none';
-            document.getElementById('mainApp').style.display = 'none';
-            authMessage('Reset link accepted. Choose a new password below.');
-            document.getElementById('recoveryPassword').focus();
-            return;
-        }
-        if (callback?.type === 'confirmation') {
-            authMessage('Email confirmed. Your organizer account is ready.');
-            const status = await api('status');
-            if (!status.initialized) await api('setup', {});
-        }
-    } catch (e) { authMessage('Unable to open the email link: ' + e.message + ' Request a new confirmation or password reset email and use the newest link.'); }
-    await initApp();
-});
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
 </script>
-<script type="module" src="/identity.js"></script>
 </body>
 </html>

@@ -5,20 +5,32 @@ import vm from 'node:vm';
 
 const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].replace('createSnowflakes();', '');
-function page(identity = {}) {
+
+function page() {
   const elements = new Map();
   const get = id => {
-    if (!elements.has(id)) elements.set(id, { value: '', textContent: '', type: 'password', hidden: true, style: {}, checkValidity: () => true, focus() {} });
+    if (!elements.has(id)) elements.set(id, { value: '', textContent: '', innerHTML: '', type: 'password', hidden: true, style: {}, checkValidity: () => true, focus() {}, setAttribute() {}, removeAttribute() {} });
     return elements.get(id);
   };
-  let callback;
   const context = vm.createContext({
-    document: { getElementById: get }, identity,
-    window: { addEventListener: (_, handler) => { callback = handler; } },
-    localStorage: { removeItem() {} }, clearInterval() {},
+    document: {
+      getElementById: get,
+      addEventListener: () => {},
+      readyState: 'loading'
+    },
+    window: { addEventListener: () => {} },
+    localStorage: {
+      store: {},
+      getItem(k) { return this.store[k] || null; },
+      setItem(k, v) { this.store[k] = String(v); },
+      removeItem(k) { delete this.store[k]; }
+    },
+    clearInterval() {},
+    setInterval() {},
+    location: { origin: 'http://localhost:3000' }
   });
   vm.runInContext(script, context);
-  return { context, get, callback: () => callback() };
+  return { context, get };
 }
 
 test('password visibility toggles accessibly without changing the password', () => {
@@ -35,31 +47,6 @@ test('password visibility toggles accessibly without changing the password', () 
   assert.equal(get('adminPass').value, 'example password');
 });
 
-test('email retries surface rate limits and release the button', async () => {
-  const { context, get } = page({ signup: async () => { throw Object.assign(new Error('Rate limited'), { status: 429 }); } });
-  get('setupEmail').value = 'organizer@example.test';
-  get('setupAdminPass').value = 'example password';
-  const button = {};
-  await context.resendConfirmation('setupEmail', 'setupAdminPass', button);
-  assert.match(get('authMessage').textContent, /Wait a few minutes/);
-  assert.equal(button.disabled, false);
-});
-
-test('recovery callback opens password entry before normal initialization', async () => {
-  const { context, get, callback } = page({ handleAuthCallback: async () => ({ type: 'recovery' }) });
-  await callback();
-  assert.equal(get('recoveryScreen').hidden, false);
-  assert.equal(get('mainApp').style.display, 'none');
-  let saved;
-  context.identity.updateUser = async update => { saved = update.password; };
-  context.initApp = async () => {};
-  get('recoveryPassword').value = 'new example password';
-  await context.saveRecoveredPassword();
-  assert.equal(saved, 'new example password');
-  assert.equal(get('recoveryPassword').value, '');
-  assert.equal(get('recoveryScreen').hidden, true);
-});
-
 test('name suggestions tolerate typos, transpositions, accents, and partial names', () => {
   const { context } = page();
   const participants = ['Camila Reyes', 'Mateo Santos', 'José Cruz'].map(realName => ({ realName }));
@@ -73,13 +60,21 @@ test('name suggestions tolerate typos, transpositions, accents, and partial name
 test('classmate list hides aliases while admin wishlists show items even before pairing', () => {
   const { context, get } = page();
   context.esc = value => String(value).replaceAll('<', '&lt;').replaceAll('"', '&quot;');
-  const data = { participants: [{ realName: 'Camila Reyes', secretName: 'Hidden Alias', wishlist: [
-    { name: '<Notebook>', link: 'https://example.test/item' },
-    { name: 'Pencil', link: 'javascript:alert(1)' },
-  ] }], pairings: [] };
+  const data = {
+    participants: [{
+      realName: 'Camila Reyes',
+      secretName: 'Hidden Alias',
+      wishlist: [
+        { name: '<Notebook>', link: 'https://example.test/item' },
+        { name: 'Pencil', link: 'javascript:alert(1)' },
+      ]
+    }],
+    pairings: []
+  };
   context.renderParticipants(data);
   assert.match(get('participantList').innerHTML, /Camila Reyes/);
   assert.doesNotMatch(get('participantList').innerHTML, /Hidden Alias/);
+
   context.renderAdminPairings(data);
   assert.match(get('adminWishlists').innerHTML, /Hidden Alias/);
   assert.match(get('adminWishlists').innerHTML, /&lt;Notebook>/);
@@ -91,7 +86,10 @@ test('a misspelled name suggests a selection without revealing a match', async (
   const { context, get } = page();
   get('revealName').value = 'Camlia Reyes';
   get('revealResult').innerHTML = 'Previous match';
-  const data = { participants: [{ realName: 'Camila Reyes' }], pairings: [{ giver: 'Camila Reyes', receiver: 'Mateo Santos' }] };
+  const data = {
+    participants: [{ realName: 'Camila Reyes' }],
+    pairings: [{ giver: 'Camila Reyes', receiver: 'Mateo Santos' }]
+  };
   context.loadData = async () => data;
   context.closeNameSuggestions = () => {};
   let suggested = false;

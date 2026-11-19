@@ -1,89 +1,156 @@
-import { test, mock } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import handler from '../api/index.js';
 
-let row;
-let conflict = false;
-let user = null;
-const columns = { id: 'id', version: 'version' };
-const matches = (record, conditions) => conditions.every(c => record[c.column] === c.value);
-const database = {
-  select: () => ({ from: () => ({ where: async () => row ? [structuredClone(row)] : [] }) }),
-  insert: () => ({ values: values => ({ onConflictDoNothing: () => ({ returning: async () => {
-    if (row) return [];
-    row = { participants: [], pairings: [], version: 0, ...values };
-    return [structuredClone(row)];
-  } }) }) }),
-  update: () => ({ set: values => ({ where: conditions => ({ returning: async () => {
-    if (conflict || !matches(row, conditions)) return [];
-    row = { ...row, ...values };
-    return [structuredClone(row)];
-  } }) }) }),
-};
-mock.module('drizzle-orm', { namedExports: {
-  eq: (column, value) => ({ column, value }), and: (...conditions) => conditions,
-} });
-mock.module('../db/index.ts', { namedExports: { db: database } });
-mock.module('../db/schema.ts', { namedExports: { exchanges: columns } });
-const { default: handler } = await import('../netlify/server/index.mjs');
-mock.method(globalThis, 'fetch', async (url) => {
-  assert.equal(url, 'https://engineeringbunot.netlify.app/.netlify/identity/user');
-  return user ? Response.json(user) : Response.json({}, { status: 401 });
-});
-const origin = 'https://example.netlify.app';
-const call = (path, body, authenticated = false, requestOrigin = origin) => handler(new Request(origin + '/api/' + path, {
-  method: body === undefined ? 'GET' : 'POST',
-  headers: { 'Content-Type': 'application/json', Origin: requestOrigin, ...(authenticated ? { Cookie: 'nf_jwt=test-session' } : {}) },
-  body: body === undefined ? undefined : JSON.stringify(body),
-}));
-const participant = name => ({ realName: name, secretName: 'Alias ' + name, wishlist: [{ name: 'Book', link: '' }] });
+// Clean test data directory
+const dataDir = path.join(process.cwd(), '.data');
+const dataFile = path.join(dataDir, 'exchange.json');
+try { fs.rmSync(dataFile, { force: true }); } catch {}
 
-test('fresh setup requires a confirmed organizer and cannot be claimed twice', async () => {
-  row = undefined;
-  assert.deepEqual(await (await call('status')).json(), { initialized: false });
-  assert.equal((await call('setup', {})).status, 401);
-  user = { id: 'organizer', confirmed_at: '2026-11-17' };
-  assert.equal((await call('setup', {}, true)).status, 201);
-  user = { id: 'outsider', confirmed_at: '2026-11-17' };
-  assert.equal((await call('setup', {}, true)).status, 409);
-  assert.equal(row.ownerId, 'organizer');
-});
+// Helper to make mock requests to handler
+async function call(action, method = 'GET', body = undefined, token = undefined) {
+  let responseData = null;
+  let responseStatus = 200;
+  let headers = {};
 
-test('registration persists wishlists, rejects duplicates and unsafe links', async () => {
-  assert.equal((await call('register', participant('Ada'))).status, 200);
-  assert.equal((await call('register', participant('ada'))).status, 409);
-  assert.equal((await call('register', { ...participant('Bob'), wishlist: [{ name: 'Bad link', link: 'javascript:alert(1)' }] })).status, 400);
-  assert.equal((await call('register', participant('Bob'))).status, 200);
-  assert.equal(row.participants.length, 2);
-  const data = await (await call('data')).json();
-  assert.equal(data.participants[0].wishlist[0].name, 'Book');
-  assert.equal(data.ownerId, undefined);
-  assert.equal(data.adminPass, undefined);
+  const req = {
+    method,
+    url: `/api/${action}`,
+    query: { path: action },
+    headers: {
+      ...(body ? { 'content-type': 'application/json' } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {})
+    },
+    body
+  };
+
+  const res = {
+    setHeader(k, v) { headers[k.toLowerCase()] = v; },
+    status(code) { responseStatus = code; return this; },
+    json(data) { responseData = data; return this; },
+    end(data) {
+      if (data && typeof data === 'string') {
+        try { responseData = JSON.parse(data); } catch { responseData = data; }
+      }
+      return this;
+    }
+  };
+
+  await handler(req, res);
+  return { status: responseStatus, data: responseData, headers };
+}
+
+let adminToken = '';
+
+test('1. status returns uninitialized when new', async () => {
+  const res = await call('status', 'GET');
+  assert.equal(res.status, 200);
+  assert.equal(res.data.initialized, false);
 });
 
-test('only the organizer can pair or reset, and nobody draws themselves', async () => {
-  assert.equal((await call('shuffle', {})).status, 403);
-  assert.equal((await call('reset', {}, true)).status, 403);
-  user = { id: 'organizer', confirmed_at: '2026-11-17' };
-  assert.equal((await call('shuffle', {}, true)).status, 200);
-  assert.equal(row.pairings.length, 2);
-  assert.ok(row.pairings.every(p => p.giver !== p.receiver));
-  assert.equal(new Set(row.pairings.map(p => p.receiver)).size, 2);
+test('2. setup initializes exchange with organizer password', async () => {
+  const res = await call('setup', 'POST', { adminPass: 'supersecret' });
+  assert.equal(res.status, 201);
+  assert.ok(res.data.token);
+  adminToken = res.data.token;
+
+  // Cannot setup twice
+  const res2 = await call('setup', 'POST', { adminPass: 'anotherone' });
+  assert.equal(res2.status, 409);
 });
 
-test('conflicting updates fail without overwriting saved records', async () => {
-  conflict = true;
-  const before = structuredClone(row);
-  assert.equal((await call('register', participant('Cara'))).status, 409);
-  assert.deepEqual(row, before);
-  conflict = false;
-  assert.equal((await call('register', participant('Cara'))).status, 200);
-  assert.deepEqual(row.pairings, []);
+test('3. admin login succeeds with correct password, fails with wrong password', async () => {
+  const failRes = await call('login', 'POST', { adminPass: 'wrongpass' });
+  assert.equal(failRes.status, 401);
+
+  const okRes = await call('login', 'POST', { adminPass: 'supersecret' });
+  assert.equal(okRes.status, 200);
+  assert.ok(okRes.data.token);
 });
 
-test('cross-site writes are rejected and reset retains organizer ownership', async () => {
-  assert.equal((await call('reset', {}, true, 'https://elsewhere.example')).status, 403);
-  assert.equal((await call('reset', {}, true)).status, 200);
-  assert.deepEqual(row.participants, []);
-  assert.deepEqual(row.pairings, []);
-  assert.equal(row.ownerId, 'organizer');
+test('4. participants can register with wishlist', async () => {
+  const r1 = await call('register', 'POST', {
+    realName: 'Juan Dela Cruz',
+    secretName: 'Mystery Mango',
+    wishlist: [{ name: 'Fountain Pen', link: 'https://example.com/pen' }]
+  });
+  assert.equal(r1.status, 200);
+  assert.equal(r1.data.participants.length, 1);
+
+  const r2 = await call('register', 'POST', {
+    realName: 'Maria Santos',
+    secretName: 'Cozy Coffee',
+    wishlist: [{ name: 'Mug', link: '' }]
+  });
+  assert.equal(r2.status, 200);
+  assert.equal(r2.data.participants.length, 2);
+
+  // Duplicate realName rejected
+  const dup = await call('register', 'POST', {
+    realName: 'juan dela cruz',
+    secretName: 'Another Alias',
+    wishlist: [{ name: 'Book', link: '' }]
+  });
+  assert.equal(dup.status, 409);
+});
+
+test('5. admin can shuffle and pairings are generated with nobody drawing themselves', async () => {
+  // Unauthorized without token
+  const unauth = await call('shuffle', 'POST', {});
+  assert.equal(unauth.status, 403);
+
+  // Authorized with token
+  const ok = await call('shuffle', 'POST', {}, adminToken);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.data.pairings.length, 2);
+  assert.ok(ok.data.pairings.every(p => p.giver !== p.receiver));
+});
+
+test('6. admin can undo shuffle and restore previous pairings', async () => {
+  const firstPairings = (await call('data', 'GET')).data.pairings;
+
+  // Shuffle a second time
+  await call('shuffle', 'POST', {}, adminToken);
+
+  // Unshuffle
+  const undoRes = await call('unshuffle', 'POST', {}, adminToken);
+  assert.equal(undoRes.status, 200);
+  assert.deepEqual(undoRes.data.pairings, firstPairings);
+});
+
+test('7. admin can edit participant details and pairings update', async () => {
+  const editRes = await call('edit', 'POST', {
+    realName: 'Juan Dela Cruz',
+    newRealName: 'Juan D. Cruz',
+    newSecretName: 'Super Mango',
+    newWishlist: [{ name: 'Planner', link: 'https://example.com/planner' }]
+  }, adminToken);
+  assert.equal(editRes.status, 200);
+  assert.equal(editRes.data.participants[0].realName, 'Juan D. Cruz');
+  assert.equal(editRes.data.participants[0].secretName, 'Super Mango');
+});
+
+test('8. admin can import Excel-parsed data', async () => {
+  const importRes = await call('import', 'POST', {
+    participants: [
+      { realName: 'Alice', secretName: 'Sun', wishlist: [{ name: 'Hat', link: '' }] },
+      { realName: 'Bob', secretName: 'Moon', wishlist: [{ name: 'Shoes', link: '' }] }
+    ],
+    pairings: [
+      { giver: 'Alice', receiver: 'Bob' },
+      { giver: 'Bob', receiver: 'Alice' }
+    ]
+  }, adminToken);
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.data.participants.length, 2);
+  assert.equal(importRes.data.pairings.length, 2);
+});
+
+test('9. admin can reset exchange', async () => {
+  const resetRes = await call('reset', 'POST', {}, adminToken);
+  assert.equal(resetRes.status, 200);
+  assert.equal(resetRes.data.participants.length, 0);
+  assert.equal(resetRes.data.pairings.length, 0);
 });
