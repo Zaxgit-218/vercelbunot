@@ -5,6 +5,47 @@ import pg from 'pg';
 
 export const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 
+export const MASTERLIST = [
+  // 11 Engineering B - Males
+  "Rhedz Ablaze Pace Agtuca",
+  "Michael Angelo Marte Balaso",
+  "Blev Dominic P. Bandoy",
+  "Daniel Condez Carajay",
+  "Ethan Miguel Dalisay Gasatan",
+  "Samuel Dejecasion Hernandez",
+  "Philip John Abranilla Lacro",
+  "Lenuel Jake Biñas Lagrada",
+  "Gabe Art Vergara Lonzaga",
+  "Joesef Mardione Wong Lozada",
+  "AJ Salilaguia Malaluan",
+  "Neil Adrian Nabuab Matin",
+  "Matthew Theodore M. Obrador",
+  "Ernie John C. Pialago",
+  "Tristan Jhudd Eliang Tulang",
+  "Jericho Terrado Vilchez",
+  "Gian Kristoff Dane Into Vinson",
+  "Gerson Paul Bangoy",
+  // 11 Engineering B - Females
+  "Crystal Bersabe Agapi",
+  "Aiyana Abrazado",
+  "Cyahne Ehrlyquine A. Banga",
+  "Audrey Anell Ortega Cacho",
+  "Samantha Colyn C. Cañada",
+  "Angelie Ende",
+  "Ricah Elyssa Cavan Galios",
+  "Marian Jane Torintera Gomez",
+  "Louise Audrey Tolorio Lago",
+  "Lyka Moreno Landayao",
+  "Angela Nicole C. Lapasaran",
+  "Sharlen Amianes Manlangit",
+  "Aia Khesia Mangadang Maurin",
+  "Alexa Malinao Orio",
+  "Jerry Mae Soroysoroy Paje",
+  "Syra Platil",
+  "Angela Jane Ollos Tangub",
+  "Zoe Torrecarion"
+];
+
 export function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
   return `${salt}:${hash}`;
@@ -42,7 +83,8 @@ export const view = row => ({
   participants: row.participants || [],
   pairings: row.pairings || [],
   prevPairings: row.prev_pairings || row.prevPairings || [],
-  version: row.version || 0
+  version: row.version || 0,
+  masterlist: MASTERLIST
 });
 
 const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
@@ -170,7 +212,16 @@ export async function executeAction(action, req, res) {
 
     if (action === 'status') {
       const row = await getRow();
-      return send({ initialized: !!row, hasDatabase: !!pool });
+      return send({
+        initialized: !!row,
+        hasDatabase: !!pool,
+        masterlistCount: MASTERLIST.length,
+        masterlist: MASTERLIST
+      });
+    }
+
+    if (action === 'masterlist') {
+      return send({ masterlist: MASTERLIST });
     }
 
     if (action === 'data') {
@@ -228,24 +279,77 @@ export async function executeAction(action, req, res) {
     let prev_pairings = row.prev_pairings || [];
     let admin_hash = row.admin_hash;
 
+    // POST /api/register
     if (action === 'register') {
       const { realName, secretName, wishlist } = body;
       if (![realName, secretName].every(v => typeof v === 'string' && v.trim() && v.length <= 150)) {
         fail(400, 'Enter both your real name and secret name (up to 150 characters).');
       }
+
+      // Check masterlist limit
+      if (participants.length >= MASTERLIST.length) {
+        fail(400, `The exchange has reached the maximum class limit of ${MASTERLIST.length} participants.`);
+      }
+
+      // Check if realName is in masterlist
+      const matched = MASTERLIST.find(m => m.toLowerCase() === realName.trim().toLowerCase());
+      if (!matched) {
+        fail(400, 'Please select your name from the 11 Engineering B class masterlist.');
+      }
+      const officialName = matched;
+
       if (!Array.isArray(wishlist) || !wishlist.length || wishlist.length > 30) {
         fail(400, 'Add 1 to 30 wishlist items.');
       }
       if (wishlist.some(w => !w || typeof w.name !== 'string' || !w.name.trim() || w.name.length > 500 || typeof w.link !== 'string' || w.link.length > 2000 || (w.link && !/^https?:\/\//i.test(w.link)))) {
         fail(400, 'Wishlist items must have a name and optional http/https link.');
       }
-      if (participants.some(p => p.realName.toLowerCase() === realName.trim().toLowerCase())) {
-        fail(409, 'This name is already registered.');
+      if (participants.some(p => p.realName.toLowerCase() === officialName.toLowerCase())) {
+        fail(409, `${officialName} is already registered!`);
       }
-      participants = [...participants, { realName: realName.trim(), secretName: secretName.trim(), wishlist }];
+
+      participants = [...participants, { realName: officialName, secretName: secretName.trim(), wishlist }];
       pairings = [];
       prev_pairings = [];
-    } else if (action === 'change-password') {
+    }
+    // POST /api/spin (Wheel Spin Reveal)
+    else if (action === 'spin') {
+      const { realName } = body;
+      if (!realName || typeof realName !== 'string') fail(400, 'Please provide your registered name.');
+      if (!pairings.length) {
+        fail(400, "Pairings haven't been drawn yet! Ask your organizer to shuffle.");
+      }
+      const pairing = pairings.find(p => p.giver.toLowerCase() === realName.trim().toLowerCase());
+      if (!pairing) {
+        fail(404, 'No pairing found for this name. Make sure you registered.');
+      }
+      const receiver = participants.find(p => p.realName === pairing.receiver);
+      if (!receiver) fail(404, 'Recipient participant not found.');
+
+      const alreadyDrawn = !!pairing.drawn;
+      // Mark as drawn / eliminated from the wheel pool
+      pairing.drawn = true;
+
+      const saved = await saveRow({
+        ...row,
+        admin_hash,
+        participants,
+        pairings,
+        prev_pairings
+      });
+      if (!saved) fail(409, 'Conflict saving spin. Please try again.');
+
+      return send({
+        giver: pairing.giver,
+        receiverSecretName: receiver.secretName,
+        wishlist: receiver.wishlist,
+        alreadyDrawn,
+        allSecretNames: participants.map(p => p.secretName),
+        drawnCount: pairings.filter(p => p.drawn).length,
+        totalPairings: pairings.length
+      });
+    }
+    else if (action === 'change-password') {
       verifyAdmin(req, row);
       const { newAdminPass } = body;
       if (!newAdminPass || typeof newAdminPass !== 'string' || newAdminPass.length < 6) {
@@ -265,7 +369,11 @@ export async function executeAction(action, req, res) {
         const j = crypto.randomInt(i + 1);
         [names[i], names[j]] = [names[j], names[i]];
       }
-      pairings = names.map((giver, i) => ({ giver, receiver: names[(i + 1) % names.length] }));
+      pairings = names.map((giver, i) => ({
+        giver,
+        receiver: names[(i + 1) % names.length],
+        drawn: false
+      }));
     } else if (action === 'unshuffle') {
       verifyAdmin(req, row);
       if (!prev_pairings || prev_pairings.length === 0) fail(400, 'No previous pairings to restore.');
@@ -291,10 +399,12 @@ export async function executeAction(action, req, res) {
         const oldName = updated.realName;
         const freshName = newRealName.trim();
         pairings = pairings.map(p => ({
+          ...p,
           giver: p.giver === oldName ? freshName : p.giver,
           receiver: p.receiver === oldName ? freshName : p.receiver,
         }));
         prev_pairings = prev_pairings.map(p => ({
+          ...p,
           giver: p.giver === oldName ? freshName : p.giver,
           receiver: p.receiver === oldName ? freshName : p.receiver,
         }));
@@ -353,7 +463,7 @@ export async function executeAction(action, req, res) {
       if (Array.isArray(importedPairings) && importedPairings.length > 0) {
         const validNames = new Set(participants.map(p => p.realName));
         const allValid = importedPairings.every(p => p && typeof p.giver === 'string' && typeof p.receiver === 'string' && validNames.has(p.giver) && validNames.has(p.receiver));
-        pairings = allValid ? importedPairings : [];
+        pairings = allValid ? importedPairings.map(p => ({ ...p, drawn: !!p.drawn })) : [];
       } else {
         pairings = [];
       }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎁 Bunot Bunot — Class Gift Exchange</title>
+    <title>🎁 Bunot Bunot — 11 Engineering B Gift Exchange</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -42,18 +42,24 @@
         @keyframes sway { 0%, 100% { margin-left: 0; } 50% { margin-left: 30px; } }
 
         /* Header */
-        .header { text-align: center; padding: 30px 16px 16px; }
+        .header { text-align: center; padding: 26px 16px 14px; }
         .header h1 {
             font-family: 'Dancing Script', cursive; font-size: 3rem;
             background: linear-gradient(135deg, var(--primary), var(--gold), var(--secondary));
             -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
         }
         .header p { color: var(--text-muted); font-size: 0.95rem; }
-        .budget-badge {
-            display: inline-block; margin-top: 10px; padding: 7px 20px;
+        .badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+        .badge {
+            display: inline-block; padding: 6px 18px; border-radius: 50px; font-weight: 600; font-size: 0.85rem; color: #fff;
+        }
+        .badge-budget {
             background: linear-gradient(135deg, var(--gold), #e67e22);
-            border-radius: 50px; font-weight: 600; font-size: 0.9rem; color: #fff;
             box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
+        }
+        .badge-class {
+            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
         }
 
         /* Sync indicator */
@@ -66,7 +72,7 @@
 
         /* Navigation */
         .nav {
-            display: flex; justify-content: center; gap: 6px; padding: 16px 12px; flex-wrap: wrap;
+            display: flex; justify-content: center; gap: 6px; padding: 14px 10px; flex-wrap: wrap;
         }
         .nav button {
             padding: 9px 18px; border: 2px solid var(--border); background: var(--bg-card);
@@ -92,12 +98,12 @@
         .card h2 { font-size: 1.3rem; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
         label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; color: var(--text-muted); }
-        input, textarea {
+        input, textarea, select {
             width: 100%; padding: 12px 16px; background: rgba(255,255,255,0.05);
             border: 1px solid var(--border); border-radius: 10px; color: var(--text);
             font-family: 'Poppins', sans-serif; font-size: 0.95rem; margin-bottom: 16px; transition: border 0.3s;
         }
-        input:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.15); }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.15); }
 
         .btn {
             display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px;
@@ -119,7 +125,6 @@
         .password-field { position: relative; margin-bottom: 16px; }
         .password-field input { margin-bottom: 0; padding-right: 78px; }
         .password-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: var(--bg-card); color: var(--gold); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
-        .password-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
         .wishlist-item { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
         .wishlist-item input { margin-bottom: 0; flex: 1; min-width: 0; }
@@ -147,31 +152,78 @@
         }
         .participant-name { font-weight: 600; word-break: break-word; }
         .participant-secret { font-size: 0.85rem; color: var(--text-muted); word-break: break-word; }
+        .participant-tag {
+            padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;
+        }
+        .tag-registered { background: rgba(39,174,96,0.2); color: var(--secondary); border: 1px solid var(--secondary); }
+        .tag-waiting { background: rgba(243,156,18,0.2); color: var(--gold); border: 1px solid var(--gold); }
+        .tag-unregistered { background: rgba(255,255,255,0.08); color: var(--text-muted); }
 
-        .name-search { max-width: 400px; margin: 0 auto; text-align: left; }
-        .name-suggestions { margin-top: 6px; max-height: 230px; overflow-y: auto; border: 1px solid var(--secondary); border-radius: 10px; background: var(--bg-card, #202c2a); }
-        .name-suggestions button { display: block; width: 100%; padding: 12px 16px; border: 0; background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+        .name-search { max-width: 440px; margin: 0 auto; text-align: left; position: relative; }
+        .name-suggestions {
+            margin-top: 4px; max-height: 250px; overflow-y: auto; border: 1px solid var(--secondary);
+            border-radius: 10px; background: var(--bg-card); position: relative; z-index: 20;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+        .name-suggestions button {
+            display: flex; justify-content: space-between; align-items: center; width: 100%;
+            padding: 10px 14px; border: 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+            background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer;
+            font-size: 0.9rem;
+        }
         .name-suggestions button:hover, .name-suggestions button[aria-selected="true"] { background: rgba(39,174,96,0.2); }
+        .name-suggestions button.disabled { opacity: 0.4; cursor: not-allowed; background: rgba(0,0,0,0.2); }
         .name-suggestions p { padding: 12px; color: var(--text-muted); font-size: 0.85rem; }
 
-        .admin-wishlist { padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.1); overflow-wrap: anywhere; }
-        .admin-wishlist ul { padding-left: 22px; margin-top: 10px; }
-        .admin-wishlist li { padding: 5px 0; }
-        .admin-wishlist a { color: var(--gold); }
-        .admin-wishlist-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-
-        .reveal-box { text-align: center; padding: 30px 10px; }
-        .reveal-box .gift-emoji { font-size: 4rem; animation: bounce 1s infinite; }
-        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        /* Wheel of Bunot Bunot */
+        .wheel-container {
+            margin: 25px auto 15px; text-align: center; max-width: 380px;
+        }
+        .wheel-wrapper {
+            position: relative; width: 320px; height: 320px; margin: 0 auto;
+            max-width: 85vw; max-height: 85vw;
+        }
+        #wheelCanvas {
+            width: 100%; height: 100%; border-radius: 50%;
+            box-shadow: 0 0 25px rgba(243, 156, 18, 0.4), 0 8px 32px rgba(0,0,0,0.6);
+            background: #16213e;
+        }
+        .wheel-pointer {
+            position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+            z-index: 10; font-size: 32px; color: var(--gold);
+            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.8));
+            animation: pointerPulse 1.4s ease-in-out infinite;
+        }
+        @keyframes pointerPulse {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-4px); }
+        }
+        .btn-spin {
+            font-size: 1.1rem; padding: 14px 38px; font-weight: 700; letter-spacing: 0.5px;
+            animation: glowPulse 2s infinite;
+        }
+        @keyframes glowPulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(243, 156, 18, 0.4); }
+            50% { box-shadow: 0 6px 25px rgba(243, 156, 18, 0.8); }
+        }
 
         .reveal-result {
-            margin-top: 20px; padding: 20px; background: rgba(39,174,96,0.1);
+            margin-top: 24px; padding: 22px; background: rgba(39,174,96,0.12);
             border: 2px solid var(--secondary); border-radius: 16px; animation: fadeIn 0.5s ease;
+            text-align: center;
         }
-        .reveal-result h3 { color: var(--secondary); font-size: 1.1rem; margin-bottom: 10px; }
-        .reveal-result .match-name { font-family: 'Dancing Script', cursive; font-size: 2.2rem; color: var(--gold); margin: 10px 0; }
-        .reveal-result .wishlist-display { text-align: left; margin-top: 16px; }
-        .reveal-result .wishlist-display li { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); list-style: none; }
+        .reveal-result h3 { color: var(--secondary); font-size: 1.15rem; margin-bottom: 8px; }
+        .reveal-result .match-name {
+            font-family: 'Dancing Script', cursive; font-size: 2.6rem; color: var(--gold);
+            margin: 10px 0; text-shadow: 0 2px 10px rgba(243, 156, 18, 0.3);
+        }
+        .eliminated-badge {
+            display: inline-block; padding: 4px 14px; background: rgba(231,76,60,0.2);
+            border: 1px solid var(--danger); border-radius: 50px; font-size: 0.75rem;
+            color: #ff7675; font-weight: 600; margin-bottom: 12px;
+        }
+        .reveal-result .wishlist-display { text-align: left; margin-top: 16px; background: rgba(0,0,0,0.2); padding: 14px; border-radius: 10px; }
+        .reveal-result .wishlist-display li { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); list-style: none; }
         .reveal-result .wishlist-display li::before { content: '🎁 '; }
         .reveal-result .wishlist-display a { color: var(--gold); text-decoration: none; }
         .reveal-result .wishlist-display a:hover { text-decoration: underline; }
@@ -179,7 +231,7 @@
         .status-bar { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
         .status-item {
             text-align: center; padding: 12px 20px; background: var(--bg-card);
-            border: 1px solid var(--border); border-radius: 12px; min-width: 100px;
+            border: 1px solid var(--border); border-radius: 12px; min-width: 95px;
         }
         .status-item .number {
             font-size: 1.8rem; font-weight: 700;
@@ -202,7 +254,7 @@
 
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); display: none; align-items: center;
+            background: rgba(0,0,0,0.65); display: none; align-items: center;
             justify-content: center; z-index: 10001; backdrop-filter: blur(4px);
             padding: 16px;
         }
@@ -221,6 +273,18 @@
             font-size: 0.75rem; color: var(--gold); margin-left: 8px;
         }
 
+        .admin-btn-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 8px; margin-top: 16px;
+        }
+        .admin-btn-grid .btn { justify-content: center; width: 100%; text-align: center; }
+
+        .admin-wishlist { padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.1); overflow-wrap: anywhere; }
+        .admin-wishlist ul { padding-left: 22px; margin-top: 10px; }
+        .admin-wishlist li { padding: 5px 0; }
+        .admin-wishlist a { color: var(--gold); }
+        .admin-wishlist-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+
         .empty-state { text-align: center; padding: 30px; color: var(--text-muted); }
         .empty-state .emoji { font-size: 3rem; margin-bottom: 10px; }
         .btn-row-center { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
@@ -229,34 +293,27 @@
         .setup-card h2 { justify-content: center; text-align: center; }
         .setup-card p { text-align: center; }
 
-        .loading-spinner {
-            display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3);
-            border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite;
+        /* Confetti canvas */
+        #confettiCanvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10002;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* Admin buttons grid */
-        .admin-btn-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-            gap: 8px; margin-top: 16px;
-        }
-        .admin-btn-grid .btn { justify-content: center; width: 100%; text-align: center; }
 
         /* Mobile-first responsive */
         @media (max-width: 600px) {
             .header h1 { font-size: 2.2rem; }
-            .header { padding: 20px 12px 12px; }
-            .nav { gap: 4px; padding: 10px 8px; }
+            .header { padding: 18px 12px 10px; }
+            .nav { gap: 4px; padding: 10px 6px; }
             .nav button { padding: 7px 12px; font-size: 0.75rem; }
             .card { padding: 16px; border-radius: 12px; }
             .card h2 { font-size: 1.1rem; }
-            .status-bar { gap: 8px; }
-            .status-item { min-width: 80px; padding: 10px 12px; }
-            .status-item .number { font-size: 1.5rem; }
+            .status-bar { gap: 6px; }
+            .status-item { min-width: 75px; padding: 8px 10px; }
+            .status-item .number { font-size: 1.4rem; }
             .btn { padding: 10px 18px; font-size: 0.85rem; }
             .btn-sm { padding: 6px 12px; font-size: 0.75rem; }
-            .reveal-box .gift-emoji { font-size: 3rem; }
-            .reveal-result .match-name { font-size: 1.8rem; }
+            .wheel-wrapper { width: 270px; height: 270px; }
+            .reveal-result .match-name { font-size: 2.1rem; }
             .modal { padding: 18px; border-radius: 14px; }
             .participant-card { padding: 10px 12px; }
             .participant-avatar { width: 32px; height: 32px; font-size: 0.8rem; }
@@ -269,12 +326,14 @@
         @media (max-width: 360px) {
             .header h1 { font-size: 1.8rem; }
             .nav button { padding: 6px 10px; font-size: 0.7rem; }
+            .wheel-wrapper { width: 240px; height: 240px; }
             .admin-btn-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
+<canvas id="confettiCanvas"></canvas>
 <div class="snowflakes" id="snowflakes"></div>
 
 <!-- Sync bar -->
@@ -284,12 +343,12 @@
 <div id="setupScreen" style="display:none;">
     <div class="header">
         <h1>🎄 Bunot Bunot 🎁</h1>
-        <p>Class Gift Exchange — Secret Santa Edition</p>
+        <p>11 Engineering B — Class Gift Exchange</p>
     </div>
     <div class="card setup-card">
         <h2>🔧 First-Time Setup</h2>
         <p style="color: var(--text-muted); margin-bottom: 20px;">
-            Set an Organizer / Admin password to start your class exchange. You will use this password to access admin controls, shuffle pairs, and manage participants.
+            Set an Organizer / Admin password to start the 11 Engineering B class exchange. You will use this password to access admin controls, shuffle pairs, and manage participants.
         </p>
         <label for="setupAdminPass">Choose Organizer Password</label>
         <div class="password-field">
@@ -307,13 +366,16 @@
     <div class="header">
         <h1>🎄 Bunot Bunot 🎁</h1>
         <p>Class Gift Exchange — Secret Santa Edition</p>
-        <div class="budget-badge">💰 Minimum Budget: ₱300</div>
+        <div class="badge-row">
+            <span class="badge badge-class">🎓 11 Engineering B (36 Max)</span>
+            <span class="badge badge-budget">💰 Budget: Min. ₱300</span>
+        </div>
     </div>
 
     <div class="nav">
         <button class="active" onclick="showSection('register', this)">📝 Register</button>
-        <button onclick="showSection('reveal', this)">🔍 Reveal</button>
-        <button onclick="showSection('participants', this)">👥 List</button>
+        <button onclick="showSection('reveal', this)">🎡 Spin Wheel</button>
+        <button onclick="showSection('participants', this)">👥 Class List</button>
         <button onclick="showSection('admin', this)">⚙️ Admin</button>
     </div>
 
@@ -322,13 +384,21 @@
         <div id="register" class="section active">
             <div class="card">
                 <h2>📝 Join Bunot Bunot!</h2>
-                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">
-                    Enter your real name, choose a fun secret name (alias), and add your wishlist so your Secret Santa knows what to get you!
+                <p style="color: var(--text-muted); margin-bottom: 16px; font-size: 0.9rem;">
+                    Select your name from the <strong>11 Engineering B masterlist</strong>. Spots left: <strong id="spotsLeftText" style="color:var(--gold);">36/36</strong>
                 </p>
-                <label for="realName">Your Real Name</label>
-                <input type="text" id="realName" placeholder="e.g. Juan Dela Cruz">
+
+                <!-- Masterlist selection dropdown / search -->
+                <div class="name-search" style="max-width: 100%; margin-bottom: 16px;" onfocusout="if (!this.contains(event.relatedTarget)) closeMasterSuggestions()">
+                    <label for="realNameInput">Your Real Name (Class Masterlist)</label>
+                    <input type="text" id="realNameInput" placeholder="Start typing your name to select..." autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" oninput="updateMasterSuggestions()" onfocus="updateMasterSuggestions()" style="margin-bottom: 0;">
+                    <div id="masterSuggestions" class="name-suggestions" role="listbox" hidden></div>
+                    <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 6px;">Select your official name from the roll list.</p>
+                </div>
+
                 <label for="secretName">Your Secret Name (Alias)</label>
-                <input type="text" id="secretName" placeholder="e.g. Mystery Mango 🥭">
+                <input type="text" id="secretName" placeholder="e.g. Mystery Mango 🥭 or Santa Ninja 🥷">
+
                 <label>Your Wishlist <span style="color:var(--text-muted)">(item name + optional link)</span></label>
                 <div id="wishlistItems">
                     <div class="wishlist-item">
@@ -339,53 +409,71 @@
                 </div>
                 <button class="btn btn-outline btn-sm" onclick="addWishItem()" style="margin-bottom: 20px;">+ Add Item</button>
                 <div>
-                    <button class="btn btn-primary" id="registerBtn" onclick="registerParticipant()">🎁 Register</button>
+                    <button class="btn btn-primary" id="registerBtn" onclick="registerParticipant()">🎁 Register for Bunot</button>
                 </div>
             </div>
         </div>
 
-        <!-- REVEAL -->
+        <!-- REVEAL / SPIN THE WHEEL -->
         <div id="reveal" class="section">
             <div class="card">
-                <div class="reveal-box">
-                    <div class="gift-emoji">🎁</div>
-                    <h2 style="justify-content: center;">Who Did You Get?</h2>
+                <div style="text-align: center;">
+                    <h2 style="justify-content: center;">🎡 Bunot Bunot — Spin the Wheel!</h2>
                     <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">
-                        Enter your real name to see your Bunot Bunot match!
+                        Select your name, tap the wheel to spin, and draw your Secret Santa match!
                     </p>
+
                     <div class="name-search" onfocusout="if (!this.contains(event.relatedTarget)) closeNameSuggestions()">
-                        <label for="revealName">Your registered name</label>
-                        <input type="text" id="revealName" placeholder="Start typing your real name..." autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="nameSuggestions" aria-describedby="nameSearchHint" oninput="document.getElementById('revealResult').innerHTML = ''; updateNameSuggestions()" onfocus="updateNameSuggestions()" onkeydown="handleNameKey(event)" style="margin-bottom: 0;">
+                        <label for="revealName">Your Registered Name</label>
+                        <input type="text" id="revealName" placeholder="Start typing your name..." autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="nameSuggestions" oninput="onRevealNameChanged()" onfocus="updateNameSuggestions()" onkeydown="handleNameKey(event)" style="margin-bottom: 0;">
                         <div id="nameSuggestions" class="name-suggestions" role="listbox" aria-label="Registered names" hidden></div>
-                        <p id="nameSearchHint" style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;" aria-live="polite">Choose your registered name. Suggestions also allow small typos.</p>
                     </div>
-                    <div style="margin-top: 10px;">
-                        <button class="btn btn-secondary" onclick="revealMatch()">🔓 Reveal My Match</button>
+
+                    <!-- Status message if pairings not ready -->
+                    <div id="wheelStatusMessage" style="display:none; margin-top: 20px; color: var(--gold); font-size: 0.95rem;"></div>
+
+                    <!-- Wheel View -->
+                    <div id="wheelContainer" class="wheel-container" style="display: none;">
+                        <div class="wheel-wrapper">
+                            <div class="wheel-pointer">▼</div>
+                            <canvas id="wheelCanvas" width="340" height="340"></canvas>
+                        </div>
+                        <div style="margin-top: 18px;">
+                            <button class="btn btn-gold btn-spin" id="spinBtn" onclick="spinWheel()">
+                                <span>🎡 TAP TO SPIN WHEEL!</span>
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- Match Result Display -->
                     <div id="revealResult"></div>
                 </div>
             </div>
         </div>
 
-        <!-- PARTICIPANTS -->
+        <!-- PARTICIPANTS / CLASS LIST -->
         <div id="participants" class="section">
             <div class="status-bar">
                 <div class="status-item">
-                    <div class="number" id="totalCount">0</div>
-                    <div class="label">Participants</div>
+                    <div class="number" id="totalCount">0/36</div>
+                    <div class="label">Registered</div>
                 </div>
                 <div class="status-item">
                     <div class="number" id="pairedStatus">❌</div>
                     <div class="label">Paired</div>
                 </div>
+                <div class="status-item">
+                    <div class="number" id="drawnStatus">0/0</div>
+                    <div class="label">Spun & Drawn</div>
+                </div>
             </div>
             <div class="card">
-                <h2>👥 Registered Participants</h2>
+                <h2>👥 11 Engineering B Masterlist (36 Students)</h2>
                 <div style="margin-bottom: 15px;">
                     <button class="btn btn-outline btn-sm" onclick="refreshData()">🔄 Refresh</button>
                 </div>
                 <div id="participantList">
-                    <div class="empty-state"><div class="emoji">🦗</div><p>No participants yet.</p></div>
+                    <div class="empty-state"><div class="emoji">🦗</div><p>Loading masterlist...</p></div>
                 </div>
             </div>
         </div>
@@ -406,9 +494,9 @@
                 </div>
                 <div id="adminControls" style="display: none;">
                     <div class="card" style="background: rgba(39,174,96,0.08); border-color: var(--secondary); margin-bottom: 20px;">
-                        <h3 style="margin-bottom: 8px;">📤 Share This Link With Your Class GC</h3>
+                        <h3 style="margin-bottom: 8px;">📤 Share This Link With 11 Engineering B GC</h3>
                         <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
-                            Classmates open this link to register for your Bunot Bunot.
+                            Classmates open this link to register and spin their Bunot Bunot match!
                         </p>
                         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                             <input type="text" id="shareLinkDisplay" readonly style="font-family: monospace; font-size: 0.8rem; margin-bottom: 0; flex: 1; min-width: 0;">
@@ -531,7 +619,7 @@ async function loadData() {
     try {
         const data = await api('data');
         cachedData = data;
-        setSyncStatus('ok', '🟢 Connected — shared data refreshes every 15 seconds');
+        setSyncStatus('ok', '🟢 Connected — 11 Engineering B');
         return data;
     } catch (e) {
         setSyncStatus('error', '🔴 Unable to sync — refresh to try again');
@@ -583,7 +671,7 @@ async function completeSetup() {
             adminToken = res.token;
             localStorage.setItem('bunot_admin_token', adminToken);
         }
-        showToast('🎉 Exchange ready! Share the site link with your class.');
+        showToast('🎉 Exchange ready! Share the link with 11 Engineering B.');
         await initApp();
     } catch (e) { showToast(e.message, 'error'); }
 }
@@ -605,10 +693,45 @@ function showToast(msg, type = 'success') {
     toast.className = `toast ${type}`;
     toast.textContent = msg;
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    setTimeout(() => toast.remove(), 3200);
 }
 
-// ==================== REGISTRATION ====================
+// ==================== REGISTRATION WITH MASTERLIST ====================
+function updateMasterSuggestions() {
+    const input = document.getElementById('realNameInput');
+    const query = input.value.trim().toLowerCase();
+    const list = document.getElementById('masterSuggestions');
+    const masterlist = cachedData?.masterlist || [];
+    const registeredSet = new Set((cachedData?.participants || []).map(p => p.realName.toLowerCase()));
+
+    const filtered = masterlist.filter(name => !query || name.toLowerCase().includes(query));
+
+    if (!filtered.length) {
+        list.innerHTML = '<p>No student found matching "' + esc(input.value) + '". Must be from 11 Engineering B.</p>';
+    } else {
+        list.innerHTML = filtered.map((name, i) => {
+            const isReg = registeredSet.has(name.toLowerCase());
+            if (isReg) {
+                return `<button type="button" class="disabled" disabled><span>${esc(name)}</span> <span style="color:var(--danger);font-size:0.8rem;">(Registered ✓)</span></button>`;
+            }
+            return `<button type="button" onmousedown="selectMasterName('${esc(name).replace(/'/g, "\\'")}')"><span>${esc(name)}</span> <span style="color:var(--secondary);font-size:0.8rem;">Select ➔</span></button>`;
+        }).join('');
+    }
+    list.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+}
+
+function selectMasterName(name) {
+    document.getElementById('realNameInput').value = name;
+    closeMasterSuggestions();
+}
+
+function closeMasterSuggestions() {
+    const list = document.getElementById('masterSuggestions');
+    list.hidden = true;
+    document.getElementById('realNameInput').setAttribute('aria-expanded', 'false');
+}
+
 function addWishItem() {
     const container = document.getElementById('wishlistItems');
     const div = document.createElement('div');
@@ -626,22 +749,16 @@ function removeWishItem(btn) {
 }
 
 async function registerParticipant() {
-    const realName = document.getElementById('realName').value.trim();
+    const realName = document.getElementById('realNameInput').value.trim();
     const secretName = document.getElementById('secretName').value.trim();
-    if (!realName || !secretName) return showToast('Please fill in both names!', 'error');
+    if (!realName) return showToast('Please select your name from the class masterlist!', 'error');
+    if (!secretName) return showToast('Please choose a secret name (alias)!', 'error');
 
     const btn = document.getElementById('registerBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="loading-spinner"></span> Registering...';
 
     try {
-        const data = await loadData();
-        if (!data) return;
-        if (data.participants.find(p => p.realName.toLowerCase() === realName.toLowerCase())) {
-            showToast('This name is already registered!', 'error');
-            return;
-        }
-
         const wishlist = [];
         document.querySelectorAll('#wishlistItems .wishlist-item').forEach(item => {
             const name = item.querySelector('.wish-name').value.trim();
@@ -655,7 +772,7 @@ async function registerParticipant() {
 
         await mutate('register', { realName, secretName, wishlist });
 
-        document.getElementById('realName').value = '';
+        document.getElementById('realNameInput').value = '';
         document.getElementById('secretName').value = '';
         document.getElementById('wishlistItems').innerHTML = `
             <div class="wishlist-item">
@@ -668,11 +785,11 @@ async function registerParticipant() {
     } catch (e) {
         showToast(e.message, 'error');
     } finally {
-        btn.disabled = false; btn.innerHTML = '🎁 Register';
+        btn.disabled = false; btn.innerHTML = '🎁 Register for Bunot';
     }
 }
 
-// ==================== PARTICIPANTS ====================
+// ==================== PARTICIPANTS / CLASS LIST ====================
 async function refreshData() {
     const data = await loadData();
     if (!data) return;
@@ -684,32 +801,62 @@ async function refreshData() {
 }
 
 function renderParticipants(data) {
-    const list = document.getElementById('participantList');
-    document.getElementById('totalCount').textContent = data.participants.length;
-    document.getElementById('pairedStatus').textContent = data.pairings.length > 0 ? '✅' : '❌';
+    const totalCount = data.participants.length;
+    const masterTotal = data.masterlist?.length || 36;
+    const pairings = data.pairings || [];
+    const drawnCount = pairings.filter(p => p.drawn).length;
 
-    if (data.participants.length === 0) {
-        list.innerHTML = '<div class="empty-state"><div class="emoji">🦗</div><p>No participants yet. Be the first to register!</p></div>';
-        return;
-    }
-    list.innerHTML = data.participants.map(p => `
-        <div class="participant-card">
-            <div class="participant-info">
-                <div class="participant-avatar">${esc(p.realName.charAt(0).toUpperCase())}</div>
-                <div>
-                    <div class="participant-name">${esc(p.realName)}</div>
+    document.getElementById('totalCount').textContent = `${totalCount}/${masterTotal}`;
+    document.getElementById('pairedStatus').textContent = pairings.length > 0 ? '✅' : '❌';
+    document.getElementById('drawnStatus').textContent = `${drawnCount}/${pairings.length || totalCount}`;
+    const spotsLeft = document.getElementById('spotsLeftText');
+    if (spotsLeft) spotsLeft.textContent = `${masterTotal - totalCount}/${masterTotal}`;
+
+    const list = document.getElementById('participantList');
+    const registeredMap = new Map(data.participants.map(p => [p.realName.toLowerCase(), p]));
+    const pairingsMap = new Map(pairings.map(p => [p.giver.toLowerCase(), p]));
+
+    const masterlist = data.masterlist?.length ? data.masterlist : (data.participants || []).map(p => p.realName);
+    list.innerHTML = masterlist.map(name => {
+        const p = registeredMap.get(name.toLowerCase());
+        const pair = pairingsMap.get(name.toLowerCase());
+
+        let tagHtml = `<span class="participant-tag tag-unregistered">⚪ Not Registered</span>`;
+        if (p) {
+            if (pair?.drawn) {
+                tagHtml = `<span class="participant-tag tag-registered">🎯 Spun & Drawn</span>`;
+            } else if (pairings.length > 0) {
+                tagHtml = `<span class="participant-tag tag-waiting">⏳ Waiting to Spin</span>`;
+            } else {
+                tagHtml = `<span class="participant-tag tag-registered">✅ Registered</span>`;
+            }
+        }
+
+        return `
+            <div class="participant-card">
+                <div class="participant-info">
+                    <div class="participant-avatar">${esc(name.charAt(0).toUpperCase())}</div>
+                    <div>
+                        <div class="participant-name">${esc(name)}</div>
+                    </div>
                 </div>
+                <div>${tagHtml}</div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
-// ==================== REVEAL ====================
+// ==================== REVEAL / SPIN THE WHEEL ====================
 let suggestedNames = [];
 let activeNameIndex = -1;
+let isSpinning = false;
+let currentWheelAngle = 0;
+let wheelSegments = [];
+
 function normalizeName(name) {
     return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
+
 function nameDistance(a, b) {
     const rows = Array.from({ length: a.length + 1 }, (_, i) => [i]);
     for (let j = 0; j <= b.length; j++) rows[0][j] = j;
@@ -721,95 +868,360 @@ function nameDistance(a, b) {
     }
     return rows[a.length][b.length];
 }
+
 function matchingNames(participants, query) {
     const term = normalizeName(query).slice(0, 150);
     return participants.map(p => {
-        const name = normalizeName(p.realName);
+        const rawName = typeof p === 'string' ? p : p.realName;
+        const name = normalizeName(rawName);
         const distance = Math.min(nameDistance(term, name), ...name.split(' ').map(word => nameDistance(term, word)));
         const score = !term || name.startsWith(term) ? 0 : name.includes(term) ? 1 : distance <= (term.length < 5 ? 1 : 2) ? distance + 2 : Infinity;
-        return { name: p.realName, score };
+        return { name: rawName, score };
     }).filter(p => Number.isFinite(p.score)).sort((a, b) => a.score - b.score || a.name.localeCompare(b.name)).slice(0, 8).map(p => p.name);
 }
+
+function revealMatch() { return spinWheel(); }
+
 function closeNameSuggestions() {
     document.getElementById('nameSuggestions').hidden = true;
-    const input = document.getElementById('revealName');
-    input.setAttribute('aria-expanded', 'false');
-    input.removeAttribute('aria-activedescendant');
-    activeNameIndex = -1;
+    document.getElementById('revealName').setAttribute('aria-expanded', 'false');
 }
+
 function updateNameSuggestions() {
     const input = document.getElementById('revealName');
     suggestedNames = matchingNames(cachedData?.participants || [], input.value);
-    activeNameIndex = -1;
-    input.removeAttribute('aria-activedescendant');
     const list = document.getElementById('nameSuggestions');
-    list.innerHTML = suggestedNames.length ? suggestedNames.map((name, i) => `<button type="button" role="option" aria-selected="false" id="name-option-${i}" onmousedown="event.preventDefault()" onclick="selectSuggestedName(${i})">${esc(name)}</button>`).join('') : '<p role="status">No matching names. Check your spelling or registration.</p>';
+    list.innerHTML = suggestedNames.length ? suggestedNames.map((name, i) =>
+        `<button type="button" onmousedown="selectSuggestedName(${i})">${esc(name)}</button>`
+    ).join('') : '<p>No registered classmate found with that name.</p>';
     list.hidden = false;
     input.setAttribute('aria-expanded', 'true');
 }
+
 function selectSuggestedName(index) {
     document.getElementById('revealName').value = suggestedNames[index];
-    document.getElementById('revealResult').innerHTML = '';
-    document.getElementById('revealName').focus();
     closeNameSuggestions();
+    onRevealNameChanged();
 }
+
 function handleNameKey(event) {
-    const list = document.getElementById('nameSuggestions');
-    if (event.key === 'Escape') return closeNameSuggestions();
+    if (event.key === 'Escape') closeNameSuggestions();
     if (event.key === 'Enter') {
         event.preventDefault();
-        if (!list.hidden && activeNameIndex >= 0) selectSuggestedName(activeNameIndex);
-        else revealMatch();
+        closeNameSuggestions();
+        onRevealNameChanged();
     }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-    event.preventDefault();
-    if (list.hidden) updateNameSuggestions();
-    if (!suggestedNames.length) return;
-    activeNameIndex = (activeNameIndex + (event.key === 'ArrowDown' ? 1 : -1) + suggestedNames.length) % suggestedNames.length;
-    list.querySelectorAll('[role="option"]').forEach((option, i) => option.setAttribute('aria-selected', String(i === activeNameIndex)));
-    const option = document.getElementById('name-option-' + activeNameIndex);
-    document.getElementById('revealName').setAttribute('aria-activedescendant', option.id);
-    option.scrollIntoView({ block: 'nearest' });
 }
 
-async function revealMatch() {
+function onRevealNameChanged() {
     const name = document.getElementById('revealName').value.trim();
+    const wheelContainer = document.getElementById('wheelContainer');
+    const statusMsg = document.getElementById('wheelStatusMessage');
     const resultDiv = document.getElementById('revealResult');
     resultDiv.innerHTML = '';
-    closeNameSuggestions();
-    if (!name) return showToast('Please enter your name!', 'error');
 
-    const data = await loadData();
-    if (!data || data.pairings.length === 0) return showToast("Pairings haven't been drawn yet! Ask your admin.", 'error');
-
-    const pairing = data.pairings.find(p => p.giver.toLowerCase() === name.toLowerCase());
-    if (!pairing) {
-        updateNameSuggestions();
-        return showToast('Choose your registered name from the suggestions, then reveal again.', 'error');
+    if (!name) {
+        wheelContainer.style.display = 'none';
+        statusMsg.style.display = 'none';
+        return;
     }
 
-    const receiver = data.participants.find(p => p.realName === pairing.receiver);
-    if (!receiver) return showToast('Something went wrong. Contact admin.', 'error');
+    const participant = cachedData?.participants?.find(p => p.realName.toLowerCase() === name.toLowerCase());
+    if (!participant) {
+        wheelContainer.style.display = 'none';
+        statusMsg.style.display = 'block';
+        statusMsg.textContent = '⚠️ This name is not registered yet. Please register first!';
+        return;
+    }
 
-    const wishHtml = receiver.wishlist.map(w => {
-        if (w.link) return `<li>${esc(w.name)} — <a href="${esc(w.link)}" target="_blank" rel="noopener noreferrer">🔗 Link</a></li>`;
+    if (!cachedData?.pairings?.length) {
+        wheelContainer.style.display = 'none';
+        statusMsg.style.display = 'block';
+        statusMsg.textContent = '⏳ Pairings haven’t been generated yet! Please ask the admin to shuffle first.';
+        return;
+    }
+
+    statusMsg.style.display = 'none';
+    wheelContainer.style.display = 'block';
+
+    // Populate wheel segments with Secret Names
+    setupWheel();
+
+    // Check if already drawn
+    const pairing = cachedData.pairings.find(p => p.giver.toLowerCase() === name.toLowerCase());
+    if (pairing?.drawn) {
+        document.getElementById('spinBtn').querySelector('span').textContent = '🎡 REPLAY SPIN ANIMATION';
+    } else {
+        document.getElementById('spinBtn').querySelector('span').textContent = '🎡 TAP TO SPIN WHEEL!';
+    }
+}
+
+// ==================== CANVAS WHEEL DRAWING & AUDIO ====================
+const WHEEL_COLORS = [
+    '#e74c3c', '#27ae60', '#f39c12', '#c0392b',
+    '#219a52', '#d35400', '#8e44ad', '#16a085',
+    '#2980b9', '#e67e22', '#1abc9c', '#9b59b6'
+];
+
+function setupWheel() {
+    const canvas = document.getElementById('wheelCanvas');
+    if (!canvas) return;
+    const secrets = (cachedData?.participants || []).map(p => p.secretName);
+    wheelSegments = secrets.length ? secrets : ['Mystery Gift 🎁', 'Secret Santa 🎅', 'Christmas Star ⭐'];
+    drawWheel(currentWheelAngle);
+}
+
+function drawWheel(angle) {
+    const canvas = document.getElementById('wheelCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const radius = width / 2 - 10;
+    const n = wheelSegments.length;
+    const sliceAngle = (2 * Math.PI) / n;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Slices
+    for (let i = 0; i < n; i++) {
+        const start = angle + i * sliceAngle;
+        const end = start + sliceAngle;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, start, end);
+        ctx.closePath();
+        ctx.fillStyle = WHEEL_COLORS[i % WHEEL_COLORS.length];
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#16213e';
+        ctx.stroke();
+
+        // Label
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(start + sliceAngle / 2);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px Poppins, sans-serif';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+
+        let label = wheelSegments[i];
+        if (label.length > 14) label = label.slice(0, 12) + '…';
+        ctx.fillText(label, radius - 15, 4);
+        ctx.restore();
+    }
+
+    // Outer golden ring with lights
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#f39c12';
+    ctx.stroke();
+
+    // Center peg
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 24, 0, 2 * Math.PI);
+    ctx.fillStyle = '#16213e';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#f39c12';
+    ctx.stroke();
+
+    ctx.fillStyle = '#f39c12';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎁', centerX, centerY);
+}
+
+// Web Audio Ticker sound (works offline, zero latency)
+function playTick() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(620, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.035);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.035);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.035);
+    } catch (_) {}
+}
+
+async function spinWheel() {
+    if (isSpinning) return;
+    const resultDiv = document.getElementById('revealResult');
+    if (resultDiv) resultDiv.innerHTML = '';
+    const name = document.getElementById('revealName').value.trim();
+    if (!name) return showToast('Please enter your name!', 'error');
+
+    const participant = cachedData?.participants?.find(p => p.realName.toLowerCase() === name.toLowerCase());
+    if (!participant) {
+        updateNameSuggestions();
+        return showToast('Choose your registered name from the suggestions, then spin again.', 'error');
+    }
+
+    const spinBtn = document.getElementById('spinBtn');
+    spinBtn.disabled = true;
+    document.getElementById('revealResult').innerHTML = '';
+
+    try {
+        // Fetch target match from backend
+        const matchData = await api('spin', { realName: name });
+        isSpinning = true;
+
+        // Ensure receiver's secret name is on the wheel
+        let targetIndex = wheelSegments.indexOf(matchData.receiverSecretName);
+        if (targetIndex === -1) {
+            wheelSegments.push(matchData.receiverSecretName);
+            targetIndex = wheelSegments.length - 1;
+        }
+
+        const n = wheelSegments.length;
+        const sliceAngle = (2 * Math.PI) / n;
+
+        // Pointer is at TOP: angle is -Math.PI / 2 (or 3 * Math.PI / 2)
+        // Center of slice i is at (wheelAngle + i * sliceAngle + sliceAngle / 2)
+        // We want (wheelAngle + targetIndex * sliceAngle + sliceAngle / 2) = 3 * Math.PI / 2 (mod 2PI)
+        const targetSliceCenter = targetIndex * sliceAngle + sliceAngle / 2;
+        const pointerAngle = 3 * Math.PI / 2;
+
+        const currentMod = currentWheelAngle % (2 * Math.PI);
+        let delta = (pointerAngle - targetSliceCenter - currentMod) % (2 * Math.PI);
+        if (delta < 0) delta += 2 * Math.PI;
+
+        const extraSpins = 6 * 2 * Math.PI; // 6 full rotations
+        const totalRotation = extraSpins + delta;
+        const startAngle = currentWheelAngle;
+        const finalAngle = startAngle + totalRotation;
+        const duration = 4800; // 4.8 seconds
+        const startTime = performance.now();
+        let lastTickAngle = startAngle;
+
+        function animateWheel(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            // Ease out cubic
+            const ease = 1 - Math.pow(1 - progress, 3);
+            currentWheelAngle = startAngle + totalRotation * ease;
+
+            // Trigger tick audio when a slice passes top pointer
+            if (Math.abs(currentWheelAngle - lastTickAngle) >= sliceAngle) {
+                playTick();
+                lastTickAngle = currentWheelAngle;
+            }
+
+            drawWheel(currentWheelAngle);
+
+            if (progress < 1) {
+                requestAnimationFrame(animateWheel);
+            } else {
+                currentWheelAngle = finalAngle;
+                drawWheel(currentWheelAngle);
+                isSpinning = false;
+                spinBtn.disabled = false;
+                spinBtn.querySelector('span').textContent = '🎡 REPLAY SPIN';
+                triggerConfetti();
+                displayMatchResult(matchData);
+                refreshData();
+            }
+        }
+
+        requestAnimationFrame(animateWheel);
+
+    } catch (e) {
+        spinBtn.disabled = false;
+        isSpinning = false;
+        showToast(e.message, 'error');
+    }
+}
+
+function displayMatchResult(data) {
+    const resultDiv = document.getElementById('revealResult');
+    const wishHtml = data.wishlist.map(w => {
+        if (w.link) return `<li>${esc(w.name)} — <a href="${esc(w.link)}" target="_blank" rel="noopener noreferrer">🔗 View Item Link</a></li>`;
         return `<li>${esc(w.name)}</li>`;
     }).join('');
 
     resultDiv.innerHTML = `
         <div class="reveal-result">
-            <h3>🎉 You are the Secret Santa of...</h3>
-            <div class="match-name">${esc(receiver.secretName)}</div>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">Remember: minimum budget is <strong>₱300</strong></p>
+            <span class="eliminated-badge">🎯 Eliminated from Wheel Pool!</span>
+            <h3>🎉 You drew your Secret Santa match!</h3>
+            <div class="match-name">${esc(data.receiverSecretName)}</div>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
+                Keep it secret! Minimum gift budget is <strong>₱300</strong>.
+            </p>
             <div class="wishlist-display">
                 <h4 style="margin-bottom: 8px;">📋 Their Wishlist:</h4>
                 <ul style="padding: 0;">${wishHtml}</ul>
             </div>
         </div>
     `;
+    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-// ==================== ADMIN ====================
+// Lightweight Confetti Particle Canvas
+function triggerConfetti() {
+    const canvas = document.getElementById('confettiCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const colors = ['#e74c3c', '#f39c12', '#27ae60', '#3498db', '#e84393', '#fdcb6e'];
+    const particles = Array.from({ length: 90 }, () => ({
+        x: canvas.width / 2,
+        y: canvas.height * 0.45,
+        vx: (Math.random() - 0.5) * 16,
+        vy: (Math.random() - 0.8) * 14,
+        size: Math.random() * 8 + 5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        rotation: Math.random() * 360,
+        vr: (Math.random() - 0.5) * 10,
+        alpha: 1
+    }));
+
+    const start = performance.now();
+    function run(now) {
+        const elapsed = now - start;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let alive = false;
+
+        particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.28; // gravity
+            p.vx *= 0.98;
+            p.rotation += p.vr;
+            p.alpha = Math.max(0, 1 - elapsed / 3200);
+
+            if (p.alpha > 0) {
+                alive = true;
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.translate(p.x, p.y);
+                ctx.rotate((p.rotation * Math.PI) / 180);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+                ctx.restore();
+            }
+        });
+
+        if (alive) requestAnimationFrame(run);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    requestAnimationFrame(run);
+}
+
+// ==================== ADMIN PANEL ====================
 let isAdmin = false;
 
 async function showAdminControls() {
@@ -853,7 +1265,7 @@ function adminLogout() {
 async function copyShareLink() {
     try {
         await navigator.clipboard.writeText(location.origin);
-        showToast('📋 Link copied! Share it in your GC.');
+        showToast('📋 Link copied! Share with 11 Engineering B.');
     } catch (e) { showToast('Select and copy the link above.', 'info'); }
 }
 
@@ -875,7 +1287,7 @@ async function changePassword() {
 async function shufflePairs() {
     try {
         const data = await mutate('shuffle');
-        showToast(`🎲 Successfully paired ${data.pairings.length} people!`);
+        showToast(`🎲 Paired ${data.pairings.length} participants! Ready to spin.`);
     } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -897,27 +1309,25 @@ async function undoShuffle() {
 
 // ==================== ADMIN RENDER ====================
 function renderAdminPairings(data) {
-    // Wishlists with edit/delete buttons
     document.getElementById('adminWishlists').innerHTML = data.participants.length ? data.participants.map(p => `
         <div class="admin-wishlist">
             <div class="admin-wishlist-header">
                 <div>
                     <div class="participant-name">${esc(p.realName)}</div>
-                    <div class="participant-secret">${esc(p.secretName)}</div>
+                    <div class="participant-secret">🎭 Alias: ${esc(p.secretName)}</div>
                 </div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                     <button class="btn btn-outline btn-sm" onclick="openEditModal('${esc(p.realName).replace(/'/g, "\\'")}')">✏️ Edit</button>
                     <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${esc(p.realName).replace(/'/g, "\\'")}')">🗑️</button>
                 </div>
             </div>
-            <ul>${p.wishlist.map(w => `<li>${esc(w.name)}${/^https?:\/\//i.test(w.link) ? ` — <a href="${esc(w.link)}" target="_blank" rel="noopener noreferrer">View item</a>` : ''}</li>`).join('')}</ul>
+            <ul>${p.wishlist.map(w => `<li>${esc(w.name)}${/^https?:\/\//i.test(w.link) ? ` — <a href="${esc(w.link)}" target="_blank" rel="noopener noreferrer">View link</a>` : ''}</li>`).join('')}</ul>
         </div>
-    `).join('') : '<p style="color: var(--text-muted);">Wishlists appear here when participants register.</p>';
+    `).join('') : '<p style="color: var(--text-muted);">Wishlists appear here when students register.</p>';
 
-    // Pairings
     const container = document.getElementById('adminPairings');
     if (!data.pairings.length) {
-        container.innerHTML = '<p style="color: var(--text-muted);">Click "Shuffle & Pair" first.</p>';
+        container.innerHTML = '<p style="color: var(--text-muted);">Click "Shuffle & Pair" to generate pairings for the wheel.</p>';
         return;
     }
     container.innerHTML = data.pairings.map(p => {
@@ -925,11 +1335,14 @@ function renderAdminPairings(data) {
         return `
             <div class="participant-card">
                 <div class="participant-info">
-                    <div class="participant-avatar">→</div>
+                    <div class="participant-avatar">${p.drawn ? '🎯' : '⏳'}</div>
                     <div>
                         <div class="participant-name">${esc(p.giver)}</div>
                         <div class="participant-secret">gives to → <strong>${esc(p.receiver)}</strong> (🎭 ${esc(receiver?.secretName || '?')})</div>
                     </div>
+                </div>
+                <div>
+                    <span class="participant-tag ${p.drawn ? 'tag-registered' : 'tag-waiting'}">${p.drawn ? 'Spun 🎯' : 'Waiting ⏳'}</span>
                 </div>
             </div>
         `;
@@ -1014,7 +1427,7 @@ async function confirmDelete() {
     } catch (e) { showToast(e.message, 'error'); }
 }
 
-// ==================== EXPORT ====================
+// ==================== EXPORT & IMPORT ====================
 async function exportToExcel() {
     const data = await loadData();
     if (!data || !data.participants.length) return showToast('No participants to export!', 'error');
@@ -1029,6 +1442,7 @@ async function exportToExcel() {
             'Wishlist Links': p.wishlist.map(w => w.link || '—').join(', '),
             'Gives Gift To (Real Name)': pairing ? pairing.receiver : 'Not yet paired',
             'Gives Gift To (Secret Name)': matched ? matched.secretName : 'Not yet paired',
+            'Spun and Drawn': pairing ? (pairing.drawn ? 'Yes' : 'No') : 'No'
         };
     });
 
@@ -1036,13 +1450,11 @@ async function exportToExcel() {
     ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length, ...rows.map(r => (r[k] || '').length)) + 2 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Bunot Bunot');
-    XLSX.writeFile(wb, 'BunotBunot_ClassList.xlsx');
+    XLSX.writeFile(wb, '11EngineeringB_BunotBunot.xlsx');
     showToast('📊 Excel file downloaded!');
 }
 
-// ==================== IMPORT ====================
 let pendingImport = null;
-
 function importFromExcel(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1054,7 +1466,6 @@ function importFromExcel(event) {
             const wb = XLSX.read(e.target.result, { type: 'array' });
             const ws = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws);
-
             if (!rows.length) return showToast('The Excel file is empty.', 'error');
 
             const participants = [];
@@ -1066,6 +1477,7 @@ function importFromExcel(event) {
                 const wishlistItemsStr = (row['Wishlist Items'] || '').toString().trim();
                 const wishlistLinksStr = (row['Wishlist Links'] || '').toString().trim();
                 const givesTo = (row['Gives Gift To (Real Name)'] || '').toString().trim();
+                const drawn = (row['Spun and Drawn'] || '').toString().trim().toLowerCase() === 'yes';
 
                 if (!realName || !secretName) continue;
 
@@ -1076,20 +1488,17 @@ function importFromExcel(event) {
                     link: (itemLinks[i] && itemLinks[i] !== '—' && /^https?:\/\//i.test(itemLinks[i])) ? itemLinks[i] : ''
                 }));
 
-                if (wishlist.length === 0) {
-                    wishlist.push({ name: 'Gift of choice', link: '' });
-                }
+                if (wishlist.length === 0) wishlist.push({ name: 'Gift of choice', link: '' });
 
                 participants.push({ realName, secretName, wishlist });
-
                 if (givesTo && givesTo !== 'Not yet paired') {
-                    pairings.push({ giver: realName, receiver: givesTo });
+                    pairings.push({ giver: realName, receiver: givesTo, drawn });
                 }
             }
 
             if (participants.length === 0) return showToast('No valid participants found in the file.', 'error');
 
-            pendingImport = { participants, pairings: pairings.length === participants.length ? pairings : [] };
+            pendingImport = { participants, pairings };
             document.getElementById('importPreview').textContent =
                 `Found ${participants.length} participant${participants.length !== 1 ? 's' : ''}` +
                 (pairings.length === participants.length ? ` with ${pairings.length} pairing${pairings.length !== 1 ? 's' : ''}.` : '.');
@@ -1108,9 +1517,7 @@ async function confirmImport() {
         closeModal('importModal');
         pendingImport = null;
         showToast('📥 Data imported successfully!');
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
+    } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ==================== RESET ====================
@@ -1132,7 +1539,7 @@ function createSnowflakes() {
     const c = document.getElementById('snowflakes');
     if (!c) return;
     const flakes = ['❄', '❅', '❆', '✦', '•'];
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 35; i++) {
         const f = document.createElement('div');
         f.className = 'snowflake';
         f.textContent = flakes[Math.floor(Math.random() * flakes.length)];
@@ -1159,11 +1566,7 @@ async function initApp() {
         }
         await refreshData();
         if (adminToken) {
-            try {
-                await showAdminControls();
-            } catch (_) {
-                adminLogout();
-            }
+            try { await showAdminControls(); } catch (_) { adminLogout(); }
         }
         refreshTimer = setInterval(() => { if (!document.hidden) refreshData(); }, 15000);
     } catch (e) {

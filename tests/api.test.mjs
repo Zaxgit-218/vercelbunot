@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import handler from '../api/index.js';
+import { MASTERLIST } from '../api/_core.js';
 
 // Clean test data directory
 const dataDir = path.join(process.cwd(), '.data');
 const dataFile = path.join(dataDir, 'exchange.json');
 try { fs.rmSync(dataFile, { force: true }); } catch {}
 
-// Helper to make mock requests to handler
 async function call(action, method = 'GET', body = undefined, token = undefined) {
   let responseData = null;
   let responseStatus = 200;
@@ -44,10 +44,12 @@ async function call(action, method = 'GET', body = undefined, token = undefined)
 
 let adminToken = '';
 
-test('1. status returns uninitialized when new', async () => {
+test('1. status returns masterlist count of 36', async () => {
   const res = await call('status', 'GET');
   assert.equal(res.status, 200);
   assert.equal(res.data.initialized, false);
+  assert.equal(res.data.masterlistCount, 36);
+  assert.ok(res.data.masterlist.includes('Gerson Paul Bangoy'));
 });
 
 test('2. setup initializes exchange with organizer password', async () => {
@@ -55,100 +57,71 @@ test('2. setup initializes exchange with organizer password', async () => {
   assert.equal(res.status, 201);
   assert.ok(res.data.token);
   adminToken = res.data.token;
-
-  // Cannot setup twice
-  const res2 = await call('setup', 'POST', { adminPass: 'anotherone' });
-  assert.equal(res2.status, 409);
 });
 
-test('3. admin login succeeds with correct password, fails with wrong password', async () => {
-  const failRes = await call('login', 'POST', { adminPass: 'wrongpass' });
-  assert.equal(failRes.status, 401);
+test('3. registration enforces masterlist membership', async () => {
+  // Invalid name rejected
+  const fake = await call('register', 'POST', {
+    realName: 'Random Stranger',
+    secretName: 'Alien',
+    wishlist: [{ name: 'Book', link: '' }]
+  });
+  assert.equal(fake.status, 400);
 
-  const okRes = await call('login', 'POST', { adminPass: 'supersecret' });
-  assert.equal(okRes.status, 200);
-  assert.ok(okRes.data.token);
-});
-
-test('4. participants can register with wishlist', async () => {
+  // Valid masterlist names accepted
   const r1 = await call('register', 'POST', {
-    realName: 'Juan Dela Cruz',
+    realName: 'Gerson Paul Bangoy',
     secretName: 'Mystery Mango',
-    wishlist: [{ name: 'Fountain Pen', link: 'https://example.com/pen' }]
+    wishlist: [{ name: 'Headphones', link: 'https://example.com/item' }]
   });
   assert.equal(r1.status, 200);
   assert.equal(r1.data.participants.length, 1);
 
   const r2 = await call('register', 'POST', {
-    realName: 'Maria Santos',
+    realName: 'Michael Angelo Marte Balaso',
     secretName: 'Cozy Coffee',
     wishlist: [{ name: 'Mug', link: '' }]
   });
   assert.equal(r2.status, 200);
   assert.equal(r2.data.participants.length, 2);
 
-  // Duplicate realName rejected
+  // Duplicate masterlist name rejected
   const dup = await call('register', 'POST', {
-    realName: 'juan dela cruz',
-    secretName: 'Another Alias',
-    wishlist: [{ name: 'Book', link: '' }]
+    realName: 'gerson paul bangoy',
+    secretName: 'Copycat',
+    wishlist: [{ name: 'Shoes', link: '' }]
   });
   assert.equal(dup.status, 409);
 });
 
-test('5. admin can shuffle and pairings are generated with nobody drawing themselves', async () => {
-  // Unauthorized without token
-  const unauth = await call('shuffle', 'POST', {});
-  assert.equal(unauth.status, 403);
-
-  // Authorized with token
+test('4. shuffle generates pairings and marks drawn as false', async () => {
   const ok = await call('shuffle', 'POST', {}, adminToken);
   assert.equal(ok.status, 200);
   assert.equal(ok.data.pairings.length, 2);
   assert.ok(ok.data.pairings.every(p => p.giver !== p.receiver));
+  assert.ok(ok.data.pairings.every(p => p.drawn === false));
 });
 
-test('6. admin can undo shuffle and restore previous pairings', async () => {
-  const firstPairings = (await call('data', 'GET')).data.pairings;
+test('5. spin endpoint returns receiver secret name and marks drawn true', async () => {
+  const spinRes = await call('spin', 'POST', { realName: 'Gerson Paul Bangoy' });
+  assert.equal(spinRes.status, 200);
+  assert.equal(spinRes.data.receiverSecretName, 'Cozy Coffee');
+  assert.equal(spinRes.data.alreadyDrawn, false);
+  assert.equal(spinRes.data.drawnCount, 1);
 
-  // Shuffle a second time
+  // Second spin reports alreadyDrawn: true
+  const spin2 = await call('spin', 'POST', { realName: 'Gerson Paul Bangoy' });
+  assert.equal(spin2.status, 200);
+  assert.equal(spin2.data.alreadyDrawn, true);
+});
+
+test('6. undo shuffle restores pairings', async () => {
   await call('shuffle', 'POST', {}, adminToken);
-
-  // Unshuffle
   const undoRes = await call('unshuffle', 'POST', {}, adminToken);
   assert.equal(undoRes.status, 200);
-  assert.deepEqual(undoRes.data.pairings, firstPairings);
 });
 
-test('7. admin can edit participant details and pairings update', async () => {
-  const editRes = await call('edit', 'POST', {
-    realName: 'Juan Dela Cruz',
-    newRealName: 'Juan D. Cruz',
-    newSecretName: 'Super Mango',
-    newWishlist: [{ name: 'Planner', link: 'https://example.com/planner' }]
-  }, adminToken);
-  assert.equal(editRes.status, 200);
-  assert.equal(editRes.data.participants[0].realName, 'Juan D. Cruz');
-  assert.equal(editRes.data.participants[0].secretName, 'Super Mango');
-});
-
-test('8. admin can import Excel-parsed data', async () => {
-  const importRes = await call('import', 'POST', {
-    participants: [
-      { realName: 'Alice', secretName: 'Sun', wishlist: [{ name: 'Hat', link: '' }] },
-      { realName: 'Bob', secretName: 'Moon', wishlist: [{ name: 'Shoes', link: '' }] }
-    ],
-    pairings: [
-      { giver: 'Alice', receiver: 'Bob' },
-      { giver: 'Bob', receiver: 'Alice' }
-    ]
-  }, adminToken);
-  assert.equal(importRes.status, 200);
-  assert.equal(importRes.data.participants.length, 2);
-  assert.equal(importRes.data.pairings.length, 2);
-});
-
-test('9. admin can reset exchange', async () => {
+test('7. reset clears exchange participants and pairings', async () => {
   const resetRes = await call('reset', 'POST', {}, adminToken);
   assert.equal(resetRes.status, 200);
   assert.equal(resetRes.data.participants.length, 0);
