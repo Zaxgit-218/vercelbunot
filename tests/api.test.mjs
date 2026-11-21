@@ -158,3 +158,40 @@ test('7. reset clears exchange participants and pairings', async () => {
   assert.equal(resetRes.data.participants.length, 0);
   assert.equal(resetRes.data.pairings.length, 0);
 });
+
+test('8. organizer can link nickname registrations to official masterlist names', async () => {
+  const wish = [{ name: 'Book', link: '' }];
+  const imp = await call('import', 'POST', {
+    participants: [
+      { realName: 'reredz', secretName: 'Red Fox', wishlist: wish },
+      { realName: 'Gerson Paul Bangoy', secretName: 'Mystery Mango', wishlist: wish },
+      { realName: 'mikel', secretName: 'Blue Whale', wishlist: wish }
+    ],
+    pairings: [
+      { giver: 'reredz', receiver: 'Gerson Paul Bangoy' },
+      { giver: 'Gerson Paul Bangoy', receiver: 'mikel' },
+      { giver: 'mikel', receiver: 'reredz' }
+    ]
+  }, adminToken);
+  assert.equal(imp.status, 200);
+
+  // Can't link onto a name someone already registered with
+  const clash = await call('match-names', 'POST', { matches: [{ from: 'reredz', to: 'Gerson Paul Bangoy' }] }, adminToken);
+  assert.equal(clash.status, 409);
+
+  // Students can't do it
+  const noAuth = await call('match-names', 'POST', { matches: [{ from: 'reredz', to: 'Rhedz Ablaze Pace Agtuca' }] });
+  assert.equal(noAuth.status, 403);
+
+  const ok = await call('match-names', 'POST', { matches: [
+    { from: 'reredz', to: 'Rhedz Ablaze Pace Agtuca' },
+    { from: 'mikel', to: 'Michael Angelo Marte Balaso' }
+  ] }, adminToken);
+  assert.equal(ok.status, 200);
+  const names = ok.data.participants.map(p => p.realName);
+  assert.deepEqual(names, ['Rhedz Ablaze Pace Agtuca', 'Gerson Paul Bangoy', 'Michael Angelo Marte Balaso']);
+  // Pairings and secret names/wishlists follow the rename
+  assert.equal(ok.data.pairings[0].giver, 'Rhedz Ablaze Pace Agtuca');
+  assert.equal(ok.data.pairings[2].receiver, 'Rhedz Ablaze Pace Agtuca');
+  assert.equal(ok.data.participants[0].secretName, 'Red Fox');
+});

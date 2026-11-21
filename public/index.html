@@ -525,6 +525,15 @@
                     </div>
                     <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display:none;" onchange="importFromExcel(event)">
 
+                    <div id="unmatchedSection" class="card" style="margin-top: 24px; border-color: var(--gold);" hidden>
+                        <h3 style="margin-bottom: 6px;">🔗 Names Not on the Masterlist</h3>
+                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 14px;">
+                            These students registered with a nickname or typo. Check each suggested match, then link them so they show up correctly in the class list.
+                        </p>
+                        <div id="unmatchedList"></div>
+                        <button class="btn btn-gold btn-sm" id="matchAllBtn" onclick="matchAllNames()" style="margin-top: 10px;">🔗 Link All Suggested</button>
+                    </div>
+
                     <div style="margin-top: 30px;">
                         <h3 style="margin-bottom: 10px;">🔑 Change Admin Password</h3>
                         <div class="password-field">
@@ -1368,7 +1377,72 @@ async function undoShuffle() {
 }
 
 // ==================== ADMIN RENDER ====================
+// ==================== MATCH NICKNAMES TO MASTERLIST ====================
+let unmatchedNames = [];
+
+// Best masterlist guess for a nickname/typo, e.g. "reredz" → "Rhedz Ablaze Pace Agtuca".
+// Each word is compared with each word of the official name (typos, prefixes, missing letters).
+function suggestMasterName(name, candidates) {
+    const words = s => normalizeName(s).replace(/[^a-z ]/g, '').split(' ').filter(w => w.length >= 2);
+    const typed = words(name);
+    let best = null;
+    for (const cand of candidates) {
+        const official = words(cand);
+        let hits = 0, dist = 0;
+        for (const w of typed) {
+            const d = Math.min(...official.map(o =>
+                (o.length >= 3 && w.length >= 3 && (o.startsWith(w) || w.startsWith(o))) ? 0 : nameDistance(w, o)));
+            if (d <= (w.length < 5 ? 1 : 2)) { hits++; dist += d; }
+        }
+        if (hits && (!best || hits > best.hits || (hits === best.hits && dist < best.dist))) best = { name: cand, hits, dist };
+    }
+    return best?.name || null;
+}
+
+function renderUnmatched(data) {
+    const section = document.getElementById('unmatchedSection');
+    if (!section) return;
+    const master = data.masterlist || [];
+    const masterSet = new Set(master.map(n => n.toLowerCase()));
+    const registered = new Set(data.participants.map(p => p.realName.toLowerCase()));
+    const available = master.filter(n => !registered.has(n.toLowerCase()));
+    unmatchedNames = data.participants.map(p => p.realName).filter(n => !masterSet.has(n.toLowerCase()));
+
+    section.hidden = unmatchedNames.length === 0;
+    if (!unmatchedNames.length) return;
+
+    document.getElementById('unmatchedList').innerHTML = unmatchedNames.map((name, i) => {
+        const suggestion = suggestMasterName(name, available);
+        const options = available.map(n => `<option value="${esc(n)}"${n === suggestion ? ' selected' : ''}>${esc(n)}</option>`).join('');
+        return `
+            <div class="participant-card" style="flex-wrap: wrap; gap: 8px;">
+                <div class="participant-name" style="flex: 1 1 140px;">“${esc(name)}” →</div>
+                <select id="matchSelect${i}" style="flex: 2 1 200px; margin-bottom: 0;">
+                    <option value="">— choose the official name —</option>${options}
+                </select>
+                <button class="btn btn-outline btn-sm" onclick="matchNames([${i}])">🔗 Link</button>
+            </div>`;
+    }).join('');
+}
+
+async function matchNames(indexes) {
+    const matches = indexes
+        .map(i => ({ from: unmatchedNames[i], to: document.getElementById('matchSelect' + i)?.value }))
+        .filter(m => m.from && m.to);
+    if (!matches.length) return showToast('Choose an official name first.', 'error');
+    const targets = matches.map(m => m.to);
+    const dupe = targets.find((t, i) => targets.indexOf(t) !== i);
+    if (dupe) return showToast(`Two names are set to ${dupe}. Pick a different name for one of them.`, 'error');
+    try {
+        await mutate('match-names', { matches });
+        showToast(`🔗 Linked ${matches.length} name${matches.length > 1 ? 's' : ''} to the masterlist!`);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+function matchAllNames() { return matchNames(unmatchedNames.map((_, i) => i)); }
+
 function renderAdminPairings(data) {
+    renderUnmatched(data);
     document.getElementById('adminWishlists').innerHTML = data.participants.length ? data.participants.map(p => `
         <div class="admin-wishlist">
             <div class="admin-wishlist-header">

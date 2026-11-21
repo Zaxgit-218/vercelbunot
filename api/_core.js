@@ -414,6 +414,32 @@ export async function executeAction(action, req, res) {
       const temp = pairings;
       pairings = prev_pairings;
       prev_pairings = temp;
+    } else if (action === 'match-names') {
+      // Link registrations made under a nickname/typo (e.g. "reredz") to their official masterlist name
+      verifyAdmin(req, row);
+      const { matches } = body;
+      if (!Array.isArray(matches) || !matches.length || matches.length > MASTERLIST.length) {
+        fail(400, 'Choose at least one name to match.');
+      }
+      participants = [...participants];
+      const rename = (list, from, to) => list.map(p => ({
+        ...p,
+        giver: p.giver === from ? to : p.giver,
+        receiver: p.receiver === from ? to : p.receiver,
+      }));
+      for (const m of matches) {
+        if (!m || typeof m.from !== 'string' || typeof m.to !== 'string') fail(400, 'Invalid match.');
+        const official = MASTERLIST.find(n => n === m.to);
+        if (!official) fail(400, `"${m.to}" is not on the masterlist.`);
+        const idx = participants.findIndex(p => p.realName === m.from);
+        if (idx === -1) fail(404, `Participant "${m.from}" not found.`);
+        if (participants.some((p, i) => i !== idx && p.realName.toLowerCase() === official.toLowerCase())) {
+          fail(409, `${official} is already registered separately. Delete the duplicate entry first.`);
+        }
+        participants[idx] = { ...participants[idx], realName: official };
+        pairings = rename(pairings, m.from, official);
+        prev_pairings = rename(prev_pairings, m.from, official);
+      }
     } else if (action === 'edit') {
       verifyAdmin(req, row);
       const { realName, newRealName, newSecretName, newWishlist } = body;
