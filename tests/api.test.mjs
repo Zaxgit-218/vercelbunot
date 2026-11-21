@@ -102,17 +102,48 @@ test('4. shuffle generates pairings and marks drawn as false', async () => {
   assert.ok(ok.data.pairings.every(p => p.drawn === false));
 });
 
-test('5. spin endpoint returns receiver secret name and marks drawn true', async () => {
+const SECRET_FIELDS = /pairings|wishlist|secretName|receiver|admin_hash|Headphones|Mug|Mystery Mango|"giver"/;
+
+test('4b. public data never exposes pairings, wishlists, or aliases tied to names', async () => {
+  const res = await call('data', 'GET');
+  assert.equal(res.status, 200);
+  assert.doesNotMatch(JSON.stringify(res.data.participants), SECRET_FIELDS);
+  assert.equal(res.data.pairings, undefined);
+  assert.equal(res.data.paired, true);
+  assert.deepEqual(res.data.wheelNames, ['Cozy Coffee', 'Mystery Mango']);
+  assert.ok(res.data.participants.every(p => p.drawn === false));
+});
+
+test('4c. registration closes once pairings are drawn', async () => {
+  const late = await call('register', 'POST', {
+    realName: 'Zoe Torrecarion',
+    secretName: 'Latecomer',
+    wishlist: [{ name: 'Socks', link: '' }]
+  });
+  assert.equal(late.status, 409);
+});
+
+test('5. spin reveals the match once, eliminates it from the wheel, and removes the spinner', async () => {
   const spinRes = await call('spin', 'POST', { realName: 'Gerson Paul Bangoy' });
   assert.equal(spinRes.status, 200);
   assert.equal(spinRes.data.receiverSecretName, 'Cozy Coffee');
-  assert.equal(spinRes.data.alreadyDrawn, false);
   assert.equal(spinRes.data.drawnCount, 1);
+  assert.ok(spinRes.data.wheelNames.includes('Cozy Coffee'), 'wheel before the spin includes the landed name');
 
-  // Second spin reports alreadyDrawn: true
+  // Landed name is off the wheel and the spinner is marked as spun
+  const after = await call('data', 'GET');
+  assert.deepEqual(after.data.wheelNames, ['Mystery Mango']);
+  assert.equal(after.data.participants.find(p => p.realName === 'Gerson Paul Bangoy').drawn, true);
+  assert.doesNotMatch(JSON.stringify(after.data.participants), SECRET_FIELDS);
+
+  // Nobody can spin again for that name to see the result
   const spin2 = await call('spin', 'POST', { realName: 'Gerson Paul Bangoy' });
-  assert.equal(spin2.status, 200);
-  assert.equal(spin2.data.alreadyDrawn, true);
+  assert.equal(spin2.status, 409);
+  assert.equal(spin2.data.receiverSecretName, undefined);
+
+  // Organizer can still look it up
+  const admin = await call('admin', 'GET', undefined, adminToken);
+  assert.equal(admin.data.pairings.find(p => p.giver === 'Gerson Paul Bangoy').receiver, 'Michael Angelo Marte Balaso');
 });
 
 test('6. undo shuffle restores pairings', async () => {

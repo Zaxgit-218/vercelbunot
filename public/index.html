@@ -227,6 +227,17 @@
         .reveal-result .wishlist-display li::before { content: '🎁 '; }
         .reveal-result .wishlist-display a { color: var(--gold); text-decoration: none; }
         .reveal-result .wishlist-display a:hover { text-decoration: underline; }
+        .screenshot-notice {
+            margin: 0 0 16px; padding: 14px; border: 2px dashed var(--gold); border-radius: 12px;
+            background: rgba(243,156,18,0.12); color: var(--gold); font-weight: 700; font-size: 1.05rem;
+            animation: glowPulse 2s infinite;
+        }
+        .screenshot-notice small { display: block; font-weight: 400; font-size: 0.82rem; color: var(--text-muted); margin-top: 4px; }
+        .screenshot-confirm { margin-top: 18px; text-align: left; }
+        .screenshot-confirm label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 0.92rem; }
+        .screenshot-confirm input[type="checkbox"] { width: 20px; height: 20px; margin: 2px 0 0; flex-shrink: 0; accent-color: var(--secondary); }
+        .screenshot-confirm .btn { width: 100%; justify-content: center; margin-top: 12px; }
+        .screenshot-confirm .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
         .status-bar { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
         .status-item {
@@ -596,7 +607,8 @@
 
 <script>
 // ==================== SHARED DATA & API ====================
-let cachedData = null;
+let cachedData = null;   // public view: names + spun status only
+let adminData = null;    // full view (pairings, wishlists), organizer only
 let adminToken = localStorage.getItem('bunot_admin_token') || '';
 
 async function api(path, body) {
@@ -632,12 +644,7 @@ async function mutate(path, body = {}) {
     setSyncStatus('syncing', '🔄 Saving...');
     try {
         const data = await api(path, body);
-        cachedData = data;
-        renderParticipants(data);
-        if (isAdmin) {
-            renderAdminPairings(data);
-            updateUndoButton(data);
-        }
+        await refreshData();
         setSyncStatus('ok', '🟢 Saved ✓');
         return data;
     } catch (e) {
@@ -795,37 +802,40 @@ async function refreshData() {
     if (!data) return;
     renderParticipants(data);
     if (isAdmin) {
-        renderAdminPairings(data);
-        updateUndoButton(data);
+        try {
+            adminData = await api('admin');
+            renderAdminPairings(adminData);
+            updateUndoButton(adminData);
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
     }
 }
 
 function renderParticipants(data) {
     const totalCount = data.participants.length;
     const masterTotal = data.masterlist?.length || 36;
-    const pairings = data.pairings || [];
-    const drawnCount = pairings.filter(p => p.drawn).length;
+    const paired = !!data.paired;
+    const drawnCount = data.drawnCount || 0;
 
     document.getElementById('totalCount').textContent = `${totalCount}/${masterTotal}`;
-    document.getElementById('pairedStatus').textContent = pairings.length > 0 ? '✅' : '❌';
-    document.getElementById('drawnStatus').textContent = `${drawnCount}/${pairings.length || totalCount}`;
+    document.getElementById('pairedStatus').textContent = paired ? '✅' : '❌';
+    document.getElementById('drawnStatus').textContent = `${drawnCount}/${data.totalPairings || totalCount}`;
     const spotsLeft = document.getElementById('spotsLeftText');
     if (spotsLeft) spotsLeft.textContent = `${masterTotal - totalCount}/${masterTotal}`;
 
     const list = document.getElementById('participantList');
     const registeredMap = new Map(data.participants.map(p => [p.realName.toLowerCase(), p]));
-    const pairingsMap = new Map(pairings.map(p => [p.giver.toLowerCase(), p]));
 
     const masterlist = data.masterlist?.length ? data.masterlist : (data.participants || []).map(p => p.realName);
     list.innerHTML = masterlist.map(name => {
         const p = registeredMap.get(name.toLowerCase());
-        const pair = pairingsMap.get(name.toLowerCase());
 
         let tagHtml = `<span class="participant-tag tag-unregistered">⚪ Not Registered</span>`;
         if (p) {
-            if (pair?.drawn) {
+            if (p.drawn) {
                 tagHtml = `<span class="participant-tag tag-registered">🎯 Spun & Drawn</span>`;
-            } else if (pairings.length > 0) {
+            } else if (paired) {
                 tagHtml = `<span class="participant-tag tag-waiting">⏳ Waiting to Spin</span>`;
             } else {
                 tagHtml = `<span class="participant-tag tag-registered">✅ Registered</span>`;
@@ -850,6 +860,7 @@ function renderParticipants(data) {
 let suggestedNames = [];
 let activeNameIndex = -1;
 let isSpinning = false;
+let resultPending = false; // a drawn result is on screen and not yet confirmed as screenshotted
 let currentWheelAngle = 0;
 let wheelSegments = [];
 
@@ -889,11 +900,13 @@ function closeNameSuggestions() {
 
 function updateNameSuggestions() {
     const input = document.getElementById('revealName');
-    suggestedNames = matchingNames(cachedData?.participants || [], input.value);
+    // Students who already spun are out of the match list
+    const stillToSpin = (cachedData?.participants || []).filter(p => !p.drawn);
+    suggestedNames = matchingNames(stillToSpin, input.value);
     const list = document.getElementById('nameSuggestions');
     list.innerHTML = suggestedNames.length ? suggestedNames.map((name, i) =>
         `<button type="button" onmousedown="selectSuggestedName(${i})">${esc(name)}</button>`
-    ).join('') : '<p>No registered classmate found with that name.</p>';
+    ).join('') : '<p>No classmate found who still needs to spin.</p>';
     list.hidden = false;
     input.setAttribute('aria-expanded', 'true');
 }
@@ -914,6 +927,7 @@ function handleNameKey(event) {
 }
 
 function onRevealNameChanged() {
+    if (resultPending) return; // the result stays until the student confirms their screenshot
     const name = document.getElementById('revealName').value.trim();
     const wheelContainer = document.getElementById('wheelContainer');
     const statusMsg = document.getElementById('wheelStatusMessage');
@@ -934,7 +948,14 @@ function onRevealNameChanged() {
         return;
     }
 
-    if (!cachedData?.pairings?.length) {
+    if (participant.drawn) {
+        wheelContainer.style.display = 'none';
+        statusMsg.style.display = 'block';
+        statusMsg.textContent = '🎯 This name has already spun the wheel. If you lost your result, ask your organizer.';
+        return;
+    }
+
+    if (!cachedData?.paired) {
         wheelContainer.style.display = 'none';
         statusMsg.style.display = 'block';
         statusMsg.textContent = '⏳ Pairings haven’t been generated yet! Please ask the admin to shuffle first.';
@@ -944,16 +965,11 @@ function onRevealNameChanged() {
     statusMsg.style.display = 'none';
     wheelContainer.style.display = 'block';
 
-    // Populate wheel segments with Secret Names
+    // Populate wheel segments with the secret names still on the wheel
     setupWheel();
-
-    // Check if already drawn
-    const pairing = cachedData.pairings.find(p => p.giver.toLowerCase() === name.toLowerCase());
-    if (pairing?.drawn) {
-        document.getElementById('spinBtn').querySelector('span').textContent = '🎡 REPLAY SPIN ANIMATION';
-    } else {
-        document.getElementById('spinBtn').querySelector('span').textContent = '🎡 TAP TO SPIN WHEEL!';
-    }
+    const spinBtn = document.getElementById('spinBtn');
+    spinBtn.disabled = false;
+    spinBtn.querySelector('span').textContent = '🎡 TAP TO SPIN WHEEL!';
 }
 
 // ==================== CANVAS WHEEL DRAWING & AUDIO ====================
@@ -963,11 +979,10 @@ const WHEEL_COLORS = [
     '#2980b9', '#e67e22', '#1abc9c', '#9b59b6'
 ];
 
-function setupWheel() {
+function setupWheel(names = cachedData?.wheelNames) {
     const canvas = document.getElementById('wheelCanvas');
     if (!canvas) return;
-    const secrets = (cachedData?.participants || []).map(p => p.secretName);
-    wheelSegments = secrets.length ? secrets : ['Mystery Gift 🎁', 'Secret Santa 🎅', 'Christmas Star ⭐'];
+    wheelSegments = names?.length ? [...names] : ['Mystery Gift 🎁', 'Secret Santa 🎅', 'Christmas Star ⭐'];
     drawWheel(currentWheelAngle);
 }
 
@@ -1057,7 +1072,7 @@ function playTick() {
 }
 
 async function spinWheel() {
-    if (isSpinning) return;
+    if (isSpinning || resultPending) return;
     const resultDiv = document.getElementById('revealResult');
     if (resultDiv) resultDiv.innerHTML = '';
     const name = document.getElementById('revealName').value.trim();
@@ -1074,11 +1089,15 @@ async function spinWheel() {
     document.getElementById('revealResult').innerHTML = '';
 
     try {
-        // Fetch target match from backend
+        // Fetch target match from backend (this also eliminates it from the wheel on the server)
         const matchData = await api('spin', { realName: name });
         isSpinning = true;
+        resultPending = true;
+        document.getElementById('revealName').disabled = true;
+        closeNameSuggestions();
 
-        // Ensure receiver's secret name is on the wheel
+        // Spin the wheel as it looked right before this draw, so the landed name is on it
+        setupWheel(matchData.wheelNames);
         let targetIndex = wheelSegments.indexOf(matchData.receiverSecretName);
         if (targetIndex === -1) {
             wheelSegments.push(matchData.receiverSecretName);
@@ -1127,8 +1146,7 @@ async function spinWheel() {
                 currentWheelAngle = finalAngle;
                 drawWheel(currentWheelAngle);
                 isSpinning = false;
-                spinBtn.disabled = false;
-                spinBtn.querySelector('span').textContent = '🎡 REPLAY SPIN';
+                spinBtn.querySelector('span').textContent = '🎯 ALREADY SPUN';
                 triggerConfetti();
                 displayMatchResult(matchData);
                 refreshData();
@@ -1141,7 +1159,29 @@ async function spinWheel() {
         spinBtn.disabled = false;
         isSpinning = false;
         showToast(e.message, 'error');
+        refreshData(); // e.g. someone already spun for this name: update the list
     }
+}
+
+// Warn before leaving while a result hasn't been confirmed as saved
+window.addEventListener('beforeunload', event => {
+    if (resultPending) { event.preventDefault(); event.returnValue = ''; }
+});
+
+function toggleScreenshotDone(checkbox) {
+    document.getElementById('screenshotDoneBtn').disabled = !checkbox.checked;
+}
+
+function finishReveal() {
+    if (!document.getElementById('screenshotCheck')?.checked) return;
+    resultPending = false;
+    document.getElementById('revealResult').innerHTML = '';
+    const input = document.getElementById('revealName');
+    input.disabled = false;
+    input.value = '';
+    onRevealNameChanged();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast('🎁 All set! Your name is now off the list. Keep it secret!');
 }
 
 function displayMatchResult(data) {
@@ -1153,6 +1193,10 @@ function displayMatchResult(data) {
 
     resultDiv.innerHTML = `
         <div class="reveal-result">
+            <div class="screenshot-notice" role="alert">
+                📸 TAKE A SCREENSHOT NOW!
+                <small>This is the only time you'll see this. Once you close it, it can't be shown again.</small>
+            </div>
             <span class="eliminated-badge">🎯 Eliminated from Wheel Pool!</span>
             <h3>🎉 You drew your Secret Santa match!</h3>
             <div class="match-name">${esc(data.receiverSecretName)}</div>
@@ -1162,6 +1206,13 @@ function displayMatchResult(data) {
             <div class="wishlist-display">
                 <h4 style="margin-bottom: 8px;">📋 Their Wishlist:</h4>
                 <ul style="padding: 0;">${wishHtml}</ul>
+            </div>
+            <div class="screenshot-confirm">
+                <label>
+                    <input type="checkbox" id="screenshotCheck" onchange="toggleScreenshotDone(this)">
+                    <span>I took a screenshot of my match and wishlist.</span>
+                </label>
+                <button class="btn btn-gold" id="screenshotDoneBtn" onclick="finishReveal()" disabled>✅ Done — close my result</button>
             </div>
         </div>
     `;
@@ -1227,7 +1278,7 @@ let isAdmin = false;
 async function showAdminControls() {
     const data = await api('admin');
     isAdmin = true;
-    cachedData = data;
+    adminData = data;
     document.getElementById('adminLogin').style.display = 'none';
     document.getElementById('adminControls').style.display = 'block';
     document.getElementById('shareLinkDisplay').value = location.origin;
@@ -1254,6 +1305,7 @@ function adminLogout() {
     adminToken = '';
     localStorage.removeItem('bunot_admin_token');
     isAdmin = false;
+    adminData = null;
     document.getElementById('adminLogin').style.display = 'block';
     document.getElementById('adminControls').style.display = 'none';
     document.getElementById('adminPairings').textContent = '';
@@ -1284,7 +1336,14 @@ async function changePassword() {
 }
 
 // ==================== SHUFFLE / UNSHUFFLE ====================
+// Reshuffling or undoing after students have spun makes their screenshots wrong
+function confirmIfAlreadySpun(what) {
+    const spun = (adminData?.pairings || []).filter(p => p.drawn).length;
+    return !spun || confirm(`${spun} student(s) have already spun and screenshotted their match. ${what} will give everyone new matches and their screenshots will be wrong. Continue?`);
+}
+
 async function shufflePairs() {
+    if (!confirmIfAlreadySpun('Reshuffling')) return;
     try {
         const data = await mutate('shuffle');
         showToast(`🎲 Paired ${data.pairings.length} participants! Ready to spin.`);
@@ -1301,6 +1360,7 @@ function updateUndoButton(data) {
 }
 
 async function undoShuffle() {
+    if (!confirmIfAlreadySpun('Undoing the shuffle')) return;
     try {
         const data = await mutate('unshuffle');
         showToast('↩️ Previous pairings restored!');
@@ -1351,7 +1411,7 @@ function renderAdminPairings(data) {
 
 // ==================== EDIT PARTICIPANT ====================
 function openEditModal(realName) {
-    const participant = cachedData?.participants.find(p => p.realName === realName);
+    const participant = adminData?.participants.find(p => p.realName === realName);
     if (!participant) return showToast('Participant not found.', 'error');
 
     document.getElementById('editOriginalName').value = participant.realName;
@@ -1429,8 +1489,9 @@ async function confirmDelete() {
 
 // ==================== EXPORT & IMPORT ====================
 async function exportToExcel() {
-    const data = await loadData();
-    if (!data || !data.participants.length) return showToast('No participants to export!', 'error');
+    let data;
+    try { data = await api('admin'); } catch (e) { return showToast(e.message, 'error'); }
+    if (!data.participants.length) return showToast('No participants to export!', 'error');
 
     const rows = data.participants.map(p => {
         const pairing = data.pairings.find(pr => pr.giver === p.realName);

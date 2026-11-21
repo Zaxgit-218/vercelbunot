@@ -87,6 +87,32 @@ export const view = row => ({
   masterlist: MASTERLIST
 });
 
+// Secret names of everyone who has not been landed on yet (still on the wheel).
+// Sorted so the order reveals nothing about who is paired with whom.
+export function wheelNames(row) {
+  const bySecret = new Map((row.participants || []).map(p => [p.realName, p.secretName]));
+  return (row.pairings || [])
+    .filter(p => !p.drawn)
+    .map(p => bySecret.get(p.receiver))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+// What students see: who is registered and who has spun. No pairings, wishlists, or aliases tied to names.
+export const publicView = row => {
+  const pairings = row.pairings || [];
+  const drawnSet = new Set(pairings.filter(p => p.drawn).map(p => p.giver));
+  return {
+    participants: (row.participants || []).map(p => ({ realName: p.realName, drawn: drawnSet.has(p.realName) })),
+    paired: pairings.length > 0,
+    drawnCount: drawnSet.size,
+    totalPairings: pairings.length,
+    wheelNames: wheelNames(row),
+    version: row.version || 0,
+    masterlist: MASTERLIST
+  };
+};
+
 const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 let pool = null;
 let dbInitialized = false;
@@ -227,7 +253,7 @@ export async function executeAction(action, req, res) {
     if (action === 'data') {
       const row = await getRow();
       if (!row) fail(409, 'Exchange has not been set up yet. Please ask your organizer to finish setup.');
-      return send(view(row));
+      return send(publicView(row));
     }
 
     if (action === 'admin' && method === 'GET') {
@@ -286,6 +312,11 @@ export async function executeAction(action, req, res) {
         fail(400, 'Enter both your real name and secret name (up to 150 characters).');
       }
 
+      // A late sign-up would wipe the draw (and everyone's screenshots), so close registration once paired
+      if (pairings.length) {
+        fail(409, 'Registration is closed because pairings have already been drawn. Please ask your organizer.');
+      }
+
       // Check masterlist limit
       if (participants.length >= MASTERLIST.length) {
         fail(400, `The exchange has reached the maximum class limit of ${MASTERLIST.length} participants.`);
@@ -323,12 +354,17 @@ export async function executeAction(action, req, res) {
       if (!pairing) {
         fail(404, 'No pairing found for this name. Make sure you registered.');
       }
+      if (pairing.drawn) {
+        fail(409, 'You have already spun the wheel. If you lost your result, ask your organizer.');
+      }
       const receiver = participants.find(p => p.realName === pairing.receiver);
       if (!receiver) fail(404, 'Recipient participant not found.');
 
-      const alreadyDrawn = !!pairing.drawn;
-      // Mark as drawn / eliminated from the wheel pool
-      pairing.drawn = true;
+      // The wheel as it looked before this spin (still includes the person being landed on)
+      const wheelBefore = wheelNames(row);
+
+      // Eliminate: the receiver leaves the wheel and the giver can no longer spin
+      pairings = pairings.map(p => p === pairing ? { ...p, drawn: true } : p);
 
       const saved = await saveRow({
         ...row,
@@ -337,14 +373,12 @@ export async function executeAction(action, req, res) {
         pairings,
         prev_pairings
       });
-      if (!saved) fail(409, 'Conflict saving spin. Please try again.');
+      if (!saved) fail(409, 'Someone else spun at the same moment. Please try again.');
 
       return send({
-        giver: pairing.giver,
         receiverSecretName: receiver.secretName,
         wishlist: receiver.wishlist,
-        alreadyDrawn,
-        allSecretNames: participants.map(p => p.secretName),
+        wheelNames: wheelBefore,
         drawnCount: pairings.filter(p => p.drawn).length,
         totalPairings: pairings.length
       });
@@ -485,7 +519,8 @@ export async function executeAction(action, req, res) {
       prev_pairings
     });
     if (!saved) fail(409, 'Conflict: someone else updated the exchange. Please try again.');
-    return send(view(saved));
+    // Only the organizer gets the full data back; a student registering just gets the public view
+    return send(action === 'register' ? publicView(saved) : view(saved));
   } catch (error) {
     const status = error.status || 500;
     return send({ error: error.message || 'Server error. Please try again.' }, status);
