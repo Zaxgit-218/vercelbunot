@@ -227,6 +227,14 @@
         .reveal-result .wishlist-display li::before { content: '🎁 '; }
         .reveal-result .wishlist-display a { color: var(--gold); text-decoration: none; }
         .reveal-result .wishlist-display a:hover { text-decoration: underline; }
+        .reveal-result .wishlist-display li.wish-with-qr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+        .reveal-result .wishlist-display li.wish-with-qr::before { content: none; }
+        .wish-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+        .wish-text span::before { content: '🎁 '; }
+        .wish-qr { flex-shrink: 0; width: 112px; height: 112px; padding: 4px; background: #fff; border-radius: 8px; display: grid; place-items: center; }
+        .wish-qr svg { display: block; width: 100%; height: 100%; }
+        .wish-qr small { color: #555; font-size: 0.7rem; text-align: center; }
+        @media (max-width: 360px) { .wish-qr { width: 96px; height: 96px; } }
         .screenshot-notice {
             margin: 0 0 16px; padding: 14px; border: 2px dashed var(--gold); border-radius: 12px;
             background: rgba(243,156,18,0.12); color: var(--gold); font-weight: 700; font-size: 1.05rem;
@@ -911,7 +919,7 @@ function closeNameSuggestions() {
 function updateNameSuggestions() {
     const input = document.getElementById('revealName');
     // Students who already spun are out of the match list
-    const stillToSpin = (cachedData?.participants || []).filter(p => !p.drawn);
+    const stillToSpin = (cachedData?.participants || []).filter(p => !p.drawn || p.canReview);
     suggestedNames = matchingNames(stillToSpin, input.value);
     const list = document.getElementById('nameSuggestions');
     list.innerHTML = suggestedNames.length ? suggestedNames.map((name, i) =>
@@ -944,7 +952,10 @@ function resolveRevealName(typed) {
     const exact = participants.find(p => p.realName.toLowerCase() === typed.trim().toLowerCase());
     if (exact) return { participant: exact, matches: [exact.realName] };
     if (normalizeName(typed).replace(/[^a-z0-9]/g, '').length < 3) return { participant: null, matches: [] };
-    const matches = matchingNames(participants.filter(p => !p.drawn), typed);
+    // Prefer classmates who can act now (still to spin, or unlocked for a re-view); otherwise anyone
+    // registered, so someone who already spun gets the "already spun" message instead of "no match"
+    let matches = matchingNames(participants.filter(p => !p.drawn || p.canReview), typed);
+    if (!matches.length) matches = matchingNames(participants, typed);
     const participant = matches.length === 1 ? participants.find(p => p.realName === matches[0]) : null;
     return { participant, matches };
 }
@@ -966,6 +977,8 @@ function onRevealNameChanged() {
     }
 
     const { participant, matches } = resolveRevealName(name);
+    // Once the name points to one classmate, close the list so the buttons below don't jump when tapped
+    if (participant) closeNameSuggestions();
     if (!participant) {
         wheelContainer.style.display = 'none';
         statusMsg.style.display = 'block';
@@ -986,7 +999,15 @@ function onRevealNameChanged() {
     if (participant.drawn) {
         wheelContainer.style.display = 'none';
         statusMsg.style.display = 'block';
-        statusMsg.textContent = '🎯 This name has already spun the wheel. If you lost your result, ask your organizer.';
+        if (participant.canReview) {
+            // The organizer unlocked one more look at this student's match
+            statusMsg.innerHTML = `
+                🔓 Your organizer unlocked one more look at your match, <strong>${esc(participant.realName)}</strong>.
+                <span style="display:block; margin-top: 6px; color: var(--text-muted); font-size: 0.85rem;">It can be opened once, so have your screenshot ready.</span>
+                <button class="btn btn-gold" id="reviewBtn" style="margin-top: 14px;" onclick="viewMatchAgain('${esc(participant.realName).replace(/&#39;/g, "\\'")}')">👀 View my match again</button>`;
+        } else {
+            statusMsg.textContent = '🎯 This name has already spun the wheel. If you lost your result, ask your organizer to unlock one more look.';
+        }
         return;
     }
 
@@ -1223,10 +1244,78 @@ function finishReveal() {
     showToast('🎁 All set! Your name is now off the list. Keep it secret!');
 }
 
+// Shows the match again after the organizer unlocked it (one look per unlock)
+async function viewMatchAgain(realName) {
+    if (resultPending) return;
+    const btn = document.getElementById('reviewBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const data = await api('review', { realName });
+        resultPending = true;
+        const input = document.getElementById('revealName');
+        input.value = realName;
+        input.disabled = true;
+        closeNameSuggestions();
+        document.getElementById('wheelStatusMessage').style.display = 'none';
+        displayMatchResult(data);
+        refreshData();
+    } catch (e) {
+        if (btn) btn.disabled = false;
+        showToast(e.message, 'error');
+        refreshData();
+    }
+}
+
+// QR codes let a screenshot still open the wishlist links (scan it with another phone or Google Lens).
+// The library is small and only loads when a match is shown.
+let qrLibPromise = null;
+function loadQrLib() {
+    if (window.qrcode) return Promise.resolve(window.qrcode);
+    qrLibPromise = qrLibPromise || new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+        s.onload = () => resolve(window.qrcode);
+        s.onerror = () => { qrLibPromise = null; s.remove(); reject(new Error('QR library failed to load')); };
+        document.head.appendChild(s);
+    });
+    return qrLibPromise;
+}
+
+async function fillQrCodes(container) {
+    const slots = container.querySelectorAll('.wish-qr[data-url]');
+    if (!slots.length) return;
+    let qrcode;
+    try { qrcode = await loadQrLib(); } catch (_) { slots.forEach(s => s.remove()); return; }
+    slots.forEach(slot => {
+        try {
+            // Long links need the lowest error correction to fit
+            const url = slot.dataset.url;
+            const qr = qrcode(0, url.length > 600 ? 'L' : 'M');
+            qr.addData(url);
+            qr.make();
+            slot.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true, alt: 'QR code for the item link' });
+        } catch (_) {
+            slot.innerHTML = '<small>Link too long for a QR code</small>';
+        }
+    });
+}
+
+function linkHost(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return 'link'; }
+}
+
 function displayMatchResult(data) {
     const resultDiv = document.getElementById('revealResult');
+    const isReview = !!data.review;
     const wishHtml = data.wishlist.map(w => {
-        if (w.link) return `<li>${esc(w.name)} — <a href="${esc(w.link)}" target="_blank" rel="noopener noreferrer">🔗 View Item Link</a></li>`;
+        if (w.link && /^https?:\/\//i.test(w.link)) return `
+            <li class="wish-with-qr">
+                <div class="wish-text">
+                    <span>${esc(w.name)}</span>
+                    <a href="${esc(w.link)}" target="_blank" rel="noopener noreferrer">🔗 Open on ${esc(linkHost(w.link))}</a>
+                </div>
+                <div class="wish-qr" data-url="${esc(w.link)}" title="Scan to open the item link"></div>
+            </li>`;
         return `<li>${esc(w.name)}</li>`;
     }).join('');
 
@@ -1234,10 +1323,15 @@ function displayMatchResult(data) {
         <div class="reveal-result">
             <div class="screenshot-notice" role="alert">
                 📸 TAKE A SCREENSHOT NOW!
-                <small>This is the only time you'll see this. Once you close it, it can't be shown again.</small>
+                <small>${isReview
+                    ? 'Your organizer unlocked this one extra look. Once you close it, it locks again.'
+                    : "This is the only time you'll see this. Once you close it, it can't be shown again."}
+                    The QR codes still open the item links from your screenshot.</small>
             </div>
-            <span class="eliminated-badge">🎯 Eliminated from Wheel Pool!</span>
-            <h3>🎉 You drew your Secret Santa match!</h3>
+            ${isReview
+                ? '<span class="eliminated-badge" style="background: rgba(52,152,219,0.18); border-color: #3498db; color: #74b9ff;">🔓 Re-view unlocked by organizer</span>'
+                : '<span class="eliminated-badge">🎯 Eliminated from Wheel Pool!</span>'}
+            <h3>${isReview ? '🎁 Your Secret Santa match' : '🎉 You drew your Secret Santa match!'}</h3>
             <div class="match-name">${esc(data.receiverSecretName)}</div>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
                 Keep it secret! Minimum gift budget is <strong>₱300</strong>.
@@ -1255,6 +1349,7 @@ function displayMatchResult(data) {
             </div>
         </div>
     `;
+    fillQrCodes(resultDiv);
     resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -1505,12 +1600,28 @@ function renderAdminPairings(data) {
                         <div class="participant-secret">gives to → <strong>${esc(p.receiver)}</strong> (🎭 ${esc(receiver?.secretName || '?')})</div>
                     </div>
                 </div>
-                <div>
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                     <span class="participant-tag ${p.drawn ? 'tag-registered' : 'tag-waiting'}">${p.drawn ? 'Spun 🎯' : 'Waiting ⏳'}</span>
+                    ${!p.drawn ? '' : p.reviewAllowed
+                        ? `<span class="participant-tag" style="background: rgba(52,152,219,0.18); color: #74b9ff; border: 1px solid #3498db;">🔓 Re-view unlocked</span>
+                           <button class="btn btn-outline btn-sm" onclick="setReview('${jsArg(p.giver)}', false)">Cancel</button>`
+                        : `<button class="btn btn-outline btn-sm" onclick="setReview('${jsArg(p.giver)}', true)" title="Let this student see their match one more time">🔓 Allow re-view</button>`}
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// Safe to put inside a single-quoted onclick argument
+function jsArg(s) { return esc(s).replace(/\\/g, '\\\\').replace(/&#39;/g, "\\'"); }
+
+async function setReview(realName, allow) {
+    try {
+        await mutate('allow-review', { realName, allow });
+        showToast(allow
+            ? `🔓 ${realName} can now view their match once more on Spin Wheel.`
+            : `Re-view cancelled for ${realName}.`);
+    } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ==================== EDIT PARTICIPANT ====================

@@ -146,6 +146,38 @@ test('5. spin reveals the match once, eliminates it from the wheel, and removes 
   assert.equal(admin.data.pairings.find(p => p.giver === 'Gerson Paul Bangoy').receiver, 'Michael Angelo Marte Balaso');
 });
 
+test('5b. organizer can unlock one more look at a match, and it locks again after one view', async () => {
+  // Locked by default
+  const locked = await call('review', 'POST', { realName: 'Gerson Paul Bangoy' });
+  assert.equal(locked.status, 403);
+  assert.equal(locked.data.receiverSecretName, undefined);
+
+  // Only the organizer can unlock it, and only for someone who already spun
+  const noAuth = await call('allow-review', 'POST', { realName: 'Gerson Paul Bangoy' });
+  assert.equal(noAuth.status, 403);
+  const notSpun = await call('allow-review', 'POST', { realName: 'Michael Angelo Marte Balaso' }, adminToken);
+  assert.equal(notSpun.status, 400);
+  const unlock = await call('allow-review', 'POST', { realName: 'Gerson Paul Bangoy' }, adminToken);
+  assert.equal(unlock.status, 200);
+
+  // Students only see that a re-view is available, never the match itself
+  const pub = await call('data', 'GET');
+  assert.equal(pub.data.participants.find(p => p.realName === 'Gerson Paul Bangoy').canReview, true);
+  assert.doesNotMatch(JSON.stringify(pub.data.participants), SECRET_FIELDS);
+
+  const view1 = await call('review', 'POST', { realName: 'gerson paul bangoy' });
+  assert.equal(view1.status, 200);
+  assert.equal(view1.data.receiverSecretName, 'Cozy Coffee');
+  assert.equal(view1.data.wishlist[0].name, 'Mug');
+
+  // One look per unlock, and the wheel is untouched
+  const view2 = await call('review', 'POST', { realName: 'Gerson Paul Bangoy' });
+  assert.equal(view2.status, 403);
+  const after = await call('data', 'GET');
+  assert.deepEqual(after.data.wheelNames, ['Mystery Mango']);
+  assert.equal(after.data.participants.find(p => p.realName === 'Gerson Paul Bangoy').canReview, undefined);
+});
+
 test('6. undo shuffle restores pairings', async () => {
   await call('shuffle', 'POST', {}, adminToken);
   const undoRes = await call('unshuffle', 'POST', {}, adminToken);

@@ -102,8 +102,14 @@ export function wheelNames(row) {
 export const publicView = row => {
   const pairings = row.pairings || [];
   const drawnSet = new Set(pairings.filter(p => p.drawn).map(p => p.giver));
+  // Students the organizer has unlocked for one more look at their match (reveals nothing about the match itself)
+  const reviewSet = new Set(pairings.filter(p => p.drawn && p.reviewAllowed).map(p => p.giver));
   return {
-    participants: (row.participants || []).map(p => ({ realName: p.realName, drawn: drawnSet.has(p.realName) })),
+    participants: (row.participants || []).map(p => ({
+      realName: p.realName,
+      drawn: drawnSet.has(p.realName),
+      ...(reviewSet.has(p.realName) ? { canReview: true } : {})
+    })),
     paired: pairings.length > 0,
     drawnCount: drawnSet.size,
     totalPairings: pairings.length,
@@ -382,6 +388,35 @@ export async function executeAction(action, req, res) {
         drawnCount: pairings.filter(p => p.drawn).length,
         totalPairings: pairings.length
       });
+    }
+    // POST /api/review: a student sees their match once more, only after the organizer unlocked it
+    else if (action === 'review') {
+      const { realName } = body;
+      if (!realName || typeof realName !== 'string') fail(400, 'Please provide your registered name.');
+      const pairing = pairings.find(p => p.giver.toLowerCase() === realName.trim().toLowerCase());
+      if (!pairing || !pairing.drawn) fail(404, "You haven't spun yet, so there's no match to show again.");
+      if (!pairing.reviewAllowed) {
+        fail(403, 'Ask your organizer to allow one more look at your match, then try again.');
+      }
+      const receiver = participants.find(p => p.realName === pairing.receiver);
+      if (!receiver) fail(404, 'Recipient participant not found.');
+
+      // One look per unlock: lock it again straight away
+      pairings = pairings.map(p => p === pairing ? { ...p, reviewAllowed: false } : p);
+      const saved = await saveRow({ ...row, admin_hash, participants, pairings, prev_pairings });
+      if (!saved) fail(409, 'Someone else updated the exchange at the same moment. Please try again.');
+
+      return send({ receiverSecretName: receiver.secretName, wishlist: receiver.wishlist, review: true });
+    }
+    // POST /api/allow-review: organizer unlocks (or cancels) one more look for a student who already spun
+    else if (action === 'allow-review') {
+      verifyAdmin(req, row);
+      const { realName, allow = true } = body;
+      if (!realName || typeof realName !== 'string') fail(400, 'Specify the student.');
+      const pairing = pairings.find(p => p.giver === realName);
+      if (!pairing) fail(404, 'No pairing found for this student.');
+      if (!pairing.drawn) fail(400, `${realName} hasn't spun yet, so there's nothing to show again.`);
+      pairings = pairings.map(p => p === pairing ? { ...p, reviewAllowed: !!allow } : p);
     }
     else if (action === 'change-password') {
       verifyAdmin(req, row);
