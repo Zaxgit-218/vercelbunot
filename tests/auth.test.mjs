@@ -49,12 +49,26 @@ test('password visibility toggles accessibly without changing the password', () 
 
 test('name suggestions tolerate typos, transpositions, accents, and partial names', () => {
   const { context } = page();
-  const participants = ['Camila Reyes', 'Mateo Santos', 'José Cruz'].map(realName => ({ realName }));
+  const names = ['Camila Reyes', 'Mateo Santos', 'José Cruz'];
+  const top = query => context.rankNames(names, query)[0]?.name;
   for (const query of ['Camlia', 'Camila Reyse', 'Reyes', 'cami']) {
-    assert.equal(context.matchingNames(participants, query)[0], 'Camila Reyes');
+    assert.equal(top(query), 'Camila Reyes');
   }
-  assert.equal(context.matchingNames(participants, 'jose')[0], 'José Cruz');
-  assert.equal(context.matchingNames(participants, 'zzzzzzzzzz').length, 0);
+  assert.equal(top('jose'), 'José Cruz');
+  assert.equal(context.rankNames(names, 'zzzzzzzzzz').length, 0);
+});
+
+test('name chips find a student from any part of the name', () => {
+  const { context } = page();
+  const names = ['Gerson Paul Bangoy', 'Cyahne Ehrlyquine A. Banga', 'Lenuel Jake Biñas Lagrada', 'Samantha Colyn C. Cañada'];
+  const found = query => context.rankNames(names, query).map(r => r.name);
+  assert.equal(found('ban').join(' | '), 'Cyahne Ehrlyquine A. Banga | Gerson Paul Bangoy');
+  assert.equal(found('paul')[0], 'Gerson Paul Bangoy');
+  assert.equal(found('binas')[0], 'Lenuel Jake Biñas Lagrada');
+  assert.equal(found('canada')[0], 'Samantha Colyn C. Cañada');
+  assert.equal(found('gersn')[0], 'Gerson Paul Bangoy');
+  assert.equal(found('ger ban')[0], 'Gerson Paul Bangoy');
+  assert.equal(context.rankNames(names, '').length, names.length);
 });
 
 test('classmate list hides aliases while admin wishlists show items even before pairing', () => {
@@ -91,11 +105,10 @@ test('a misspelled name suggests a selection without revealing a match', async (
     pairings: [{ giver: 'Camila Reyes', receiver: 'Mateo Santos' }]
   };
   context.loadData = async () => data;
-  context.closeNameSuggestions = () => {};
   let suggested = false;
-  context.updateNameSuggestions = () => { suggested = true; };
+  context.renderPicker = key => { if (key === 'reveal') suggested = true; };
   context.showToast = () => {};
-  await context.revealMatch();
+  await context.spinWheel();
   assert.equal(suggested, true);
   assert.equal(get('revealResult').innerHTML, '');
 });
