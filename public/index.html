@@ -436,7 +436,7 @@
 
                     <div class="name-search" onfocusout="if (!this.contains(event.relatedTarget)) closeNameSuggestions()">
                         <label for="revealName">Your Registered Name</label>
-                        <input type="text" id="revealName" placeholder="Start typing your name..." autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="nameSuggestions" oninput="onRevealNameChanged()" onfocus="updateNameSuggestions()" onkeydown="handleNameKey(event)" style="margin-bottom: 0;">
+                        <input type="text" id="revealName" placeholder="Start typing your name..." autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="nameSuggestions" oninput="updateNameSuggestions(); onRevealNameChanged()" onfocus="updateNameSuggestions()" onkeydown="handleNameKey(event)" style="margin-bottom: 0;">
                         <div id="nameSuggestions" class="name-suggestions" role="listbox" aria-label="Registered names" hidden></div>
                     </div>
 
@@ -445,6 +445,7 @@
 
                     <!-- Wheel View -->
                     <div id="wheelContainer" class="wheel-container" style="display: none;">
+                        <p id="spinAsText" style="display: none; margin-bottom: 18px; color: var(--text-muted); font-size: 0.9rem;"></p>
                         <div class="wheel-wrapper">
                             <div class="wheel-pointer">▼</div>
                             <canvas id="wheelCanvas" width="340" height="340"></canvas>
@@ -935,13 +936,28 @@ function handleNameKey(event) {
     }
 }
 
+// Works out who is spinning from what was typed, so a partial name or a typo is enough.
+// An exact full name always wins. Otherwise the text must match exactly one classmate who
+// still needs to spin (at least 3 letters), so nobody can land on someone else by accident.
+function resolveRevealName(typed) {
+    const participants = cachedData?.participants || [];
+    const exact = participants.find(p => p.realName.toLowerCase() === typed.trim().toLowerCase());
+    if (exact) return { participant: exact, matches: [exact.realName] };
+    if (normalizeName(typed).replace(/[^a-z0-9]/g, '').length < 3) return { participant: null, matches: [] };
+    const matches = matchingNames(participants.filter(p => !p.drawn), typed);
+    const participant = matches.length === 1 ? participants.find(p => p.realName === matches[0]) : null;
+    return { participant, matches };
+}
+
 function onRevealNameChanged() {
     if (resultPending) return; // the result stays until the student confirms their screenshot
     const name = document.getElementById('revealName').value.trim();
     const wheelContainer = document.getElementById('wheelContainer');
     const statusMsg = document.getElementById('wheelStatusMessage');
     const resultDiv = document.getElementById('revealResult');
+    const spinAs = document.getElementById('spinAsText');
     resultDiv.innerHTML = '';
+    spinAs.style.display = 'none';
 
     if (!name) {
         wheelContainer.style.display = 'none';
@@ -949,12 +965,22 @@ function onRevealNameChanged() {
         return;
     }
 
-    const participant = cachedData?.participants?.find(p => p.realName.toLowerCase() === name.toLowerCase());
+    const { participant, matches } = resolveRevealName(name);
     if (!participant) {
         wheelContainer.style.display = 'none';
         statusMsg.style.display = 'block';
-        statusMsg.textContent = '⚠️ This name is not registered yet. Please register first!';
+        statusMsg.textContent = matches.length > 1
+            ? `👀 ${matches.length >= 8 ? 'Several' : matches.length} classmates match "${name}". Tap your name in the list, or type a bit more.`
+            : normalizeName(name).length < 3
+                ? '⌨️ Keep typing your name (at least 3 letters).'
+                : '⚠️ No registered classmate matches that name. Check the spelling, or register first!';
         return;
+    }
+
+    // Show who the typed text was matched to, so the student can confirm it's them before spinning
+    if (participant.realName.toLowerCase() !== name.toLowerCase()) {
+        spinAs.innerHTML = `Spinning as <strong>${esc(participant.realName)}</strong>. Not you? Keep typing or pick from the list.`;
+        spinAs.style.display = 'block';
     }
 
     if (participant.drawn) {
@@ -1087,11 +1113,13 @@ async function spinWheel() {
     const name = document.getElementById('revealName').value.trim();
     if (!name) return showToast('Please enter your name!', 'error');
 
-    const participant = cachedData?.participants?.find(p => p.realName.toLowerCase() === name.toLowerCase());
+    // A partial name or a typo is fine as long as it points to exactly one classmate
+    const { participant } = resolveRevealName(name);
     if (!participant) {
         updateNameSuggestions();
         return showToast('Choose your registered name from the suggestions, then spin again.', 'error');
     }
+    const realName = participant.realName;
 
     const spinBtn = document.getElementById('spinBtn');
     spinBtn.disabled = true;
@@ -1099,7 +1127,9 @@ async function spinWheel() {
 
     try {
         // Fetch target match from backend (this also eliminates it from the wheel on the server)
-        const matchData = await api('spin', { realName: name });
+        const matchData = await api('spin', { realName });
+        document.getElementById('revealName').value = realName;
+        document.getElementById('spinAsText').style.display = 'none';
         isSpinning = true;
         resultPending = true;
         document.getElementById('revealName').disabled = true;
